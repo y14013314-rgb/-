@@ -1,0 +1,2 @@
+import pages from '../../server/pages.mjs';
+export function GET(request:Request){let path=new URL(request.url).pathname;if(!path.split('/').pop()?.includes('.'))path=path.replace(/\/$/,'')+'/index.html';const html=(pages as Record<string,string>)[path];return new Response(html||'Page not found',{status:html?200:404,headers:{'Content-Type':html?'text/html; charset=utf-8':'text/plain','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});}
