@@ -8,6 +8,7 @@ dialog.querySelector('.quote-close').onclick=()=>dialog.close();dialog.addEventL
 document.addEventListener('click',e=>{const a=e.target.closest('a');if(!a)return;const u=new URL(a.href,location.href);if(u.origin===location.origin&&(u.hash==='#request-quote'||u.pathname==='/plan-my-trip/')){e.preventDefault();
 const journey=a.dataset.quoteJourney||'';
 if(journey!==sourceJourney){form.reset();sourceJourney=journey;sourceUrl=journey?location.origin+location.pathname:'';form.elements.namedItem('Destinations').value=a.dataset.quoteDestinations||'';form.elements.namedItem('Duration').value=a.dataset.quoteDays||'';}
+if(a.dataset.quoteRequirements){form.elements.namedItem('Requirements').value=a.dataset.quoteRequirements;form.elements.namedItem('Departure').value=a.dataset.quoteDeparture||'';form.elements.namedItem('Adults').value=a.dataset.quoteAdults||'2';form.elements.namedItem('Children').value=a.dataset.quoteChildren||'0';}
 const style=form.elements.namedItem('Journey style');
 if(location.pathname==='/silk-road-luxury-trains/')style.value='Luxury rail';
 if(location.pathname==='/yangtze-river-cruises/'){style.value='Yangtze cruise';const preferences=document.querySelector('#cruise-summary');if(preferences)form.elements.namedItem('Requirements').value=preferences.textContent.trim();}
