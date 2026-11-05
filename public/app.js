@@ -22,3 +22,6 @@ if(q('#planning-form')){
  q('#edit-inquiry').addEventListener('click',()=>{q('#inquiry-result').hidden=true;form.hidden=false;setStep(2);});
  q('#copy-inquiry').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(q('#inquiry-summary').textContent);q('#copy-status').textContent='Summary copied. It has not been sent.';}catch{q('#copy-status').textContent='Please select the summary text and copy it manually.';}});
 }
+
+// Native details provide keyboard support and expose their expanded state.
+qa("details").forEach(detail=>{const icon=detail.querySelector("summary b");if(icon){icon.setAttribute("aria-hidden","true");const update=()=>icon.textContent=detail.open?"−":"＋";detail.addEventListener("toggle",update);update();}});
