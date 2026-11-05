@@ -1,0 +1,52 @@
+/* Photographs sit behind the content, with independent contrast overlays. */
+.photo-section{position:relative;isolation:isolate;color:#fff;overflow:hidden;background:#173a32;padding-top:95px;padding-bottom:95px}
+.photo-section.wrap,.simple-about.photo-section{width:100%;max-width:none;margin:0;padding-left:max(6%,calc((100% - 1290px)/2));padding-right:max(6%,calc((100% - 1290px)/2))}
+.photo-section.narrow{padding-left:max(8%,calc((100% - 800px)/2));padding-right:max(8%,calc((100% - 800px)/2))}
+.photo-section>.section-photo{position:absolute;inset:0;margin:0;z-index:-2;width:100%;height:100%;pointer-events:none}
+.photo-section>.section-photo img{width:100%;height:100%;object-fit:cover;object-position:center}
+.photo-section::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(90deg,#071b16e6,#071b16ad)}
+.photo-section h1,.photo-section h2,.photo-section h3{color:#fff}
+.photo-section .eyebrow{color:#e6cfaa}
+.photo-section .lede,.photo-section .quiet,.photo-section p,.photo-section li,.photo-section .content-columns>div>p,.photo-section .info-grid p{color:#eff3ef}
+.photo-section .text-link{color:#fff;border-color:#ffffff70}
+.photo-section .button{background:#f8f4e9;color:#173c33}
+.photo-section .button:hover{background:#e4d7bc}
+.photo-section details,.photo-section .steps-grid>div,.photo-section .company-address{border-color:#ffffff55}
+.photo-section details p{color:#eff3ef}
+.photo-section aside{background:#102e28c9;border:1px solid #ffffff40}
+.photo-section aside p,.photo-section .company-name,.photo-section .founder-role,.photo-section dt{color:#e5ece7}
+.photo-section .table-scroll table{background:#102e28d9;color:#fff}
+.photo-section .table-scroll th,.photo-section .table-scroll td{color:#fff;border-color:#ffffff40}
+.page-intro.photo-section{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;min-height:560px;padding-top:100px;padding-bottom:100px}
+.page-intro.photo-section::before{background:linear-gradient(90deg,#071b16c9 0%,#071b1680 55%,#071b1633)}
+.page-intro.photo-section h1{max-width:900px;font-size:clamp(46px,6vw,88px);line-height:1.06;letter-spacing:-1.8px;text-wrap:balance}
+.page-intro.photo-section .lede{max-width:620px;font-size:18px}
+.page-intro.photo-section .eyebrow{margin-bottom:24px}
+.simple-about.photo-section{min-height:560px;align-items:center;gap:70px}
+.simple-about.photo-section>div+div{padding:0;color:#eff3ef}
+.simple-about.photo-section h2{font-size:clamp(38px,4vw,58px)}
+.company-contact.photo-section{min-height:680px}
+.company-contact.photo-section::before{background:#09251bdb}
+.company-contact.photo-section dd a:hover{color:#e6cfaa}
+.photo-section .info-grid article{border-color:#ffffff50}
+.destination-grid .destination-photo{height:220px;margin-bottom:24px}
+.destination-grid>article{overflow:hidden}
+.theme-card .theme-art,.feature-art,.route-art,.experience-banner{background-size:cover;background-position:center}
+.theme-card.silk .theme-art,.feature-art.silk,.route-art.silk,.experience-banner.silk{background-image:linear-gradient(0deg,#14291f88,#14291f00),url('/assets/editorial-mountains.jpg')}
+.theme-card.river .theme-art,.feature-art.river,.route-art.river,.experience-banner.river{background-image:linear-gradient(0deg,#14291f88,#14291f00),url('/assets/editorial-river.jpg')}
+.theme-card.wild .theme-art,.feature-art.wild,.route-art.wild,.experience-banner.wild{background-image:linear-gradient(0deg,#14291f88,#14291f00),url('/assets/editorial-mountains.jpg')}
+.theme-card.living .theme-art,.feature-art.living,.route-art.living,.experience-banner.living{background-image:linear-gradient(0deg,#14291f88,#14291f00),url('/assets/editorial-teahouse.jpg')}
+.theme-art::before,.theme-art::after,.route-art::before,.theme-art i,.rail-lines,.river-lines{display:none}
+.art-caption,.route-art>span,.experience-banner>p{text-shadow:0 2px 14px #0009}
+.final-cta{min-height:480px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(#08291faa,#08291fbf),url('/assets/editorial-river.jpg') center/cover}
+footer{position:relative;background:linear-gradient(#08251cef,#08251cef),url('/assets/editorial-teahouse.jpg') center/cover;color:#fff}
+footer::before{display:none}
+footer .wordmark,footer .footer-top>div>a:not(.wordmark),footer .footer-top p,footer .footer-bottom{color:#e6eee8}
+footer .footer-bottom{border-color:#ffffff40}
+.simple-footer{background:linear-gradient(#08251ce8,#08251ce8),url('/assets/editorial-teahouse.jpg') center/cover}
+/* Preserve clear surfaces for forms; inputs are never placed over busy imagery. */
+.photo-section .finder-panel,.photo-section .cruise-tool{color:var(--ink);background:#faf8f2}
+.photo-section .finder-panel h2,.photo-section .cruise-tool h2,.photo-section .cruise-tool p{color:var(--ink)}
+@media(max-width:900px){.simple-about.photo-section{gap:35px}.page-intro.photo-section{min-height:500px}.photo-section{padding-top:70px;padding-bottom:70px}}
+@media(max-width:600px){.photo-section{padding-top:60px;padding-bottom:60px}.photo-section.wrap,.simple-about.photo-section{padding-left:7%;padding-right:7%}.page-intro.photo-section{min-height:490px;padding-top:75px;padding-bottom:65px}.page-intro.photo-section h1{font-size:44px;letter-spacing:-1px}.page-intro.photo-section .lede{font-size:15px}.photo-section::before{background:#071b16c9}.simple-about.photo-section{min-height:550px;gap:30px}.simple-about.photo-section h2{font-size:37px}.company-contact.photo-section{padding:60px 7%}.destination-grid .destination-photo{height:220px}.final-cta{min-height:420px}.photo-section>.section-photo img{object-position:60% center}}
+.photo-section.content-columns>div>p,.photo-section.content-columns li{color:#eff3ef}
