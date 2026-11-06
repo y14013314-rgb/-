@@ -1,3 +1,5 @@
+> Current homepage: V3. See `HOME-V3.md` for the current image use, single film placeholder and inquiry behavior. The sample-video configuration below is a historical first-draft record.
+
 # Homepage first draft media
 
 All eight new homepage images are downloaded photographic stock images from Pexels, not AI-generated images. Source pages identify the depicted destination. WebP encoding changes file format/compression only.

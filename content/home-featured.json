@@ -1,0 +1,42 @@
+[
+  {
+    "title": "Silk Road Luxury Rail",
+    "description": "Ancient routes, vast horizons. Explore the possibilities of a rail-led journey through China.",
+    "image": "/assets/home-v1/xinjiang.webp",
+    "alt": "An alpine lake in Xinjiang, along the landscapes of the Silk Road",
+    "category": "LUXURY RAIL",
+    "url": "/silk-road-luxury-trains/",
+    "order": 1,
+    "featured": true
+  },
+  {
+    "title": "Yangtze River Cruises",
+    "description": "Follow the river through the Three Gorges. Find your ship, your voyage, your pace.",
+    "image": "/assets/cruise-pdf-century-p10-0.jpg",
+    "alt": "Century Legend sailing through the Three Gorges, from the operator brochure",
+    "category": "RIVER JOURNEYS",
+    "url": "/yangtze-river-cruises/",
+    "order": 2,
+    "featured": true
+  },
+  {
+    "title": "Pandas & Chongqing City Lights",
+    "description": "Sichuan life, a city in layers and the timeless landscapes of the Yangtze.",
+    "image": "/assets/home-v1/chongqing.webp",
+    "alt": "Chongqing’s glowing riverside after dark",
+    "category": "PRIVATE CHINA JOURNEY",
+    "url": "/journeys/chengdu-chongqing-yangtze/",
+    "order": 3,
+    "featured": true
+  },
+  {
+    "title": "A First Encounter with China",
+    "description": "Beijing, Xi’an and Shanghai. Imperial stories and cities looking to the future.",
+    "image": "/assets/home-v1/beijing.webp",
+    "alt": "The Great Wall winding over the mountains near Beijing",
+    "category": "PRIVATE CHINA JOURNEY",
+    "url": "/journeys/classic-china/",
+    "order": 4,
+    "featured": true
+  }
+]

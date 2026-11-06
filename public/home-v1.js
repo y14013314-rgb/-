@@ -1,21 +1,41 @@
 'use strict';
 (()=>{
-if(!document.body.classList.contains('home-v1'))return;
-// Public official samples for this local first draft; replace each section's key as SUKHA films become available.
-const films={
- songjiang:{title:'Take a closer look at Songjiang',src:'https://www.meet-in-shanghai.net/en/uploads/2026/11/01/2116725615700135937.mp4',page:'https://www.meet-in-shanghai.net/en/video/',credit:'Official Shanghai tourism sample · Shanghai Municipal Administration of Culture and Tourism. A sample destination film, not SUKHA footage or a film of the product shown.'},
- rural:{title:'A one-day rural getaway in Songjiang',src:'https://www.meet-in-shanghai.net/en/uploads/2026/10/27/2114906646202744833.mp4',page:'https://www.meet-in-shanghai.net/en/video/follow-alex-and-discover-a-oneday-rural-getaway-in-songjiang-635752',credit:'Official Shanghai tourism sample · Shanghai Municipal Administration of Culture and Tourism. A sample destination film, not SUKHA footage or a film of the product shown.'}
-};
-const dialog=document.querySelector('.home-video-dialog'),video=dialog.querySelector('video'),title=document.getElementById('home-video-title'),source=document.getElementById('home-video-source'),status=document.getElementById('home-video-status');let trigger;
-document.querySelectorAll('[data-home-film]').forEach(button=>button.addEventListener('click',()=>{
- const film=films[button.dataset.homeFilm];if(!film)return;trigger=button;title.textContent=film.title;source.href=film.page;document.getElementById('home-video-credit').textContent=film.credit;status.textContent='Loading the official sample film…';video.src=film.src;dialog.showModal();document.body.classList.add('home-video-open');video.load();video.play().catch(()=>{status.textContent='Press play to watch. If playback is unavailable, open the official source below.';});
-}));
-video.addEventListener('playing',()=>{status.textContent='';});video.addEventListener('error',()=>{status.textContent='This external film is unavailable here. You can watch it on the official tourism website below.';});
-dialog.querySelector('.home-video-close').addEventListener('click',()=>dialog.close());
-dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
-dialog.addEventListener('close',()=>{video.pause();video.removeAttribute('src');video.load();status.textContent='';document.body.classList.remove('home-video-open');trigger?.focus();});
-if('IntersectionObserver' in window&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
- const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('home-visible');observer.unobserve(entry.target);}}),{threshold:.08});
- document.body.classList.add('home-motion');document.querySelectorAll('.home-reveal').forEach(el=>observer.observe(el));
-}
+ if(!document.body.classList.contains('home-v1'))return;
+ const hero=document.querySelector('.home-hero'),slides=[...hero.querySelectorAll('[data-slide]')],dots=[...hero.querySelectorAll('[data-slide-to]')],pause=hero.querySelector('[data-slide-pause]');
+ const motion=matchMedia('(prefers-reduced-motion: reduce)');let index=0,paused=motion.matches,timer,revision=0;
+ const updatePause=()=>{pause.textContent=paused?'▶':'Ⅱ';pause.setAttribute('aria-label',paused?'Play slideshow':'Pause slideshow');};
+ const stop=()=>{paused=true;clearTimeout(timer);updatePause();};
+ const schedule=()=>{clearTimeout(timer);if(!paused&&!document.hidden)timer=setTimeout(()=>show((index+1)%slides.length),7000);};
+ async function show(next,announce=false){
+  const turn=++revision,img=slides[next].querySelector('img');
+  if(img.dataset.src){img.srcset=img.dataset.srcset;img.src=img.dataset.src;delete img.dataset.src;try{await img.decode();}catch{}}
+  if(turn!==revision)return;
+  index=next;slides.forEach((slide,i)=>{slide.classList.toggle('is-active',i===index);slide.setAttribute('aria-hidden',String(i!==index));slide.inert=i!==index;dots[i].setAttribute('aria-pressed',String(i===index));});
+  if(announce)document.querySelector('#home-slide-status').textContent=`Slide ${index+1} of ${slides.length}`;
+  schedule();
+ }
+ const manual=next=>{stop();show((next+slides.length)%slides.length,true);};
+ hero.querySelector('[data-slide-prev]').addEventListener('click',()=>manual(index-1));hero.querySelector('[data-slide-next]').addEventListener('click',()=>manual(index+1));
+ dots.forEach((dot,i)=>dot.addEventListener('click',()=>manual(i)));
+ pause.addEventListener('click',()=>{paused=!paused;updatePause();schedule();});
+ hero.addEventListener('pointerenter',()=>clearTimeout(timer));hero.addEventListener('pointerleave',schedule);
+ hero.addEventListener('focusin',event=>{if(event.target!==pause)stop();});hero.addEventListener('pointerdown',event=>{if(!pause.contains(event.target))stop();});
+ hero.addEventListener('keydown',event=>{if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();manual(index+(event.key==='ArrowRight'?1:-1));}});
+ motion.addEventListener('change',event=>{if(event.matches)stop();});document.addEventListener('visibilitychange',schedule);updatePause();schedule();
+ const form=document.querySelector('#home-quick-inquiry'),review=document.querySelector('#home-inquiry-review'),summary=document.querySelector('#home-request-text');
+ const fields=[...form.querySelectorAll('[required]')];
+ function validate(field){
+  let message='';if(!field.validity.valid){message=field.type==='checkbox'?'Please agree to the Privacy Policy before continuing.':field.type==='email'?(field.value?'Enter a valid email address.':'Please enter your email address.'):'Please choose a travel interest.';}
+  document.querySelector('#'+field.id+'-error').textContent=message;field.setAttribute('aria-invalid',String(Boolean(message)));return !message;
+ }
+ fields.forEach(field=>{field.addEventListener('input',()=>{if(field.hasAttribute('aria-invalid'))validate(field);});});
+ form.addEventListener('submit',event=>{
+  event.preventDefault();const valid=fields.map(validate);if(valid.includes(false)){document.querySelector('#home-form-status').textContent='Please check the highlighted fields.';fields[valid.indexOf(false)].focus();return;}
+  if(!window.SukhaInquiry){document.querySelector('#home-form-status').textContent='We could not prepare your request. Please contact Devin using the WhatsApp link beside this form.';return;}
+  const lines=['SUKHA — Custom journey enquiry'];for(const [label,value] of new FormData(form)){if(value.trim())lines.push(label+': '+value.trim());}lines.push('Please prepare a personalised quotation.');summary.value=lines.join('\n');
+  document.querySelector('#home-send-whatsapp').href=window.SukhaInquiry.whatsappUrl(summary.value);form.hidden=true;review.hidden=false;document.querySelector('#home-review-heading').focus();
+ });
+ document.querySelector('#home-copy-request').addEventListener('click',async()=>{try{await window.SukhaInquiry.copy(summary.value);document.querySelector('#home-copy-status').textContent='Copied. Open WeChat, paste your request, then send it to Devin.';}catch{summary.focus();summary.select();document.querySelector('#home-copy-status').textContent='Copying is unavailable. Select and copy your request above, then paste and send it in WeChat.';}});
+ document.querySelector('#home-edit-request').addEventListener('click',()=>{review.hidden=true;form.hidden=false;document.querySelector('#home-interest').focus();});
+ document.querySelectorAll('[data-home-inquiry]').forEach(link=>link.addEventListener('click',()=>{document.querySelector('#navigation').classList.remove('open');document.querySelector('#menu-toggle').setAttribute('aria-expanded','false');}));
 })();
