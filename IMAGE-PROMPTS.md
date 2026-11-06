@@ -33,3 +33,15 @@ Use case: ads-marketing. Asset type: high-definition website background panorama
 
 Use case: ads-marketing. Asset type: high-definition website background panorama. Wide cinematic panorama on the Yangtze River, a distant elegant river cruise ship sailing between forested cliffs at blue hour, subtle warm cabin lights reflected in calm dark jade water, glowing pale sky, peaceful luxury travel mood illustration, realistic scale and natural geography. Landscape 16:9 at 2560x1440 or greater if possible, crisp detailed textures, photographic style. Leave uncluttered darker space for a short white heading. No words, lettering, logos, watermark, collage or border. This is an AI travel mood illustration, not an image of a specific named ship.
 
+## Additional cruise backgrounds 2026-11-06
+
+- Website image: public/assets/cruise-terraces-v1.jpg
+- Original: ../outputs/cruise-gallery-expansion/generated/terraces-v1.png
+- Mode: built-in imagegen
+- Prompt: Use case: photorealistic-natural. Asset type: high-definition cruise website background landscape. A wide editorial travel panorama from a quiet Yangtze riverbank: layered tea-green terraced hills beside a broad jade river, distant Three Gorges cliffs, warm clear afternoon light, no identifiable ship, believable Chinese landscape, no people. Natural textures, refined realistic travel editorial style, landscape 16:9 composition, highest available detail and resolution. Leave some calm negative space for white website text. No text, lettering, logo, border, watermark or collage. This will be clearly labeled as an AI-generated landscape illustration.
+
+- Website image: public/assets/cruise-autumn-v1.jpg
+- Original: ../outputs/cruise-gallery-expansion/generated/autumn-v1.png
+- Mode: built-in imagegen
+- Prompt: Use case: photorealistic-natural. Asset type: high-definition cruise website background landscape. A wide photographic-style panorama of autumn colors on the steep cliffs along the Three Gorges of the Yangtze River, muted russet foliage and evergreen trees, winding jade river, thin morning mist and soft sun, no vessel, no people. Natural textures, refined realistic travel editorial style, landscape 16:9 composition, highest available detail and resolution. Leave some calm negative space for white website text. No text, lettering, logo, border, watermark or collage. This will be clearly labeled as an AI-generated landscape illustration.
+

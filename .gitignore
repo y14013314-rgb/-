@@ -43,3 +43,6 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# Standalone Worker output is packaged from dist.
+/worker/index.js
