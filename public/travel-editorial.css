@@ -1,0 +1,73 @@
+/* Scoped to destination and photographic journey/experience pages. */
+.travel-editorial{--travel-ink:#1b3540;--travel-gold:#d3a875;--travel-paper:#f7f5f0}
+.travel-editorial main{background:var(--travel-paper)}
+.travel-editorial .destination-grid{gap:44px 28px}
+.travel-editorial .destination-grid article{position:relative;min-width:0}
+.travel-editorial .destination-image-link{display:block;overflow:hidden;border-radius:8px;margin-bottom:24px}
+.travel-editorial .destination-grid .destination-photo{display:block;width:100%;height:280px;object-fit:cover;margin:0;transition:transform .5s}
+.travel-editorial .destination-image-link:hover img{transform:scale(1.035)}
+.travel-editorial .destination-grid h2 a{color:inherit;text-decoration:none}
+.travel-editorial .card-visual img{object-fit:cover}
+.travel-editorial .theme-card{border-radius:8px;overflow:hidden}
+.travel-editorial .editorial-figure{margin-top:0;margin-bottom:0}
+.product-film-cover{position:relative;isolation:isolate;border-radius:8px;overflow:hidden}
+.product-film-cover::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,#102c37b8,transparent 65%);z-index:1;pointer-events:none}
+.product-film-play{display:inline-flex;align-items:center;gap:18px;padding:14px 8px;border:0;background:none;color:#1b3540;font:inherit;text-align:left;cursor:pointer}
+.product-film-play>span{display:grid;place-items:center;width:76px;height:76px;flex-shrink:0;padding-left:4px;border-radius:50%;background:#d3a875;color:#142d34;box-shadow:0 0 0 9px #d3a87538;transition:transform .2s}
+.product-film-play:hover>span{transform:scale(1.06)}
+.product-film-play b{font-size:15px;font-weight:500;line-height:1.5}
+.product-film-play small{display:block;font-size:11px;font-weight:400;margin-top:5px;line-height:1.5}
+.product-film-cover .product-film-play{position:absolute;left:40px;bottom:30px;color:white;z-index:2;max-width:calc(100% - 80px)}
+.product-film-row{padding-bottom:32px}
+.product-film-play:focus-visible{outline:3px solid #b5874b;outline-offset:5px}
+@media(max-width:600px){.product-film-cover .product-film-play{left:20px;bottom:20px;max-width:calc(100% - 40px)}.product-film-play{gap:16px}.product-film-play>span{width:58px;height:58px}.product-film-play b{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.product-film-play>span{transition:none}}
+.travel-editorial .editorial-photo{display:block;width:100%;height:clamp(280px,40vw,560px);object-fit:cover;border-radius:8px}
+.travel-editorial .editorial-figure figcaption,.travel-editorial .photography-credit{font-size:11px;line-height:1.7;color:#66706c;padding-top:14px}
+.travel-editorial .editorial-figure figcaption a,.travel-editorial .photography-credit a{color:inherit;text-underline-offset:3px}
+.travel-editorial .destination-hero{position:relative;min-height:660px;height:78svh;max-height:880px;display:grid;align-items:end;background:var(--travel-ink);color:white;overflow:hidden}
+.travel-editorial .destination-hero-image,.travel-editorial .destination-hero-shade{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.travel-editorial .destination-hero-shade{background:linear-gradient(90deg,rgba(11,30,36,.64),rgba(11,30,36,.06)),linear-gradient(0deg,rgba(11,30,36,.74),transparent 80%)}
+.travel-editorial .destination-hero-copy{position:relative;padding-top:55px;padding-bottom:60px;width:88%}
+.travel-editorial .destination-back{display:inline-block;color:#fff;text-decoration:none;margin-bottom:70px;font-size:13px}
+.travel-editorial .destination-hero h1{font-size:clamp(58px,7vw,108px);letter-spacing:-.045em;line-height:1.04;margin:16px 0 24px;max-width:1000px}
+.travel-editorial .destination-hero .eyebrow{color:#ead1af}
+.travel-editorial .destination-hero-copy>p:not(.eyebrow){font-size:clamp(20px,2.1vw,30px);max-width:670px;line-height:1.45}
+.travel-editorial .destination-play{display:inline-flex;align-items:center;gap:17px;background:none;border:0;color:white;text-align:left;font:inherit;padding:16px 0;cursor:pointer}
+.travel-editorial .destination-play>span{display:grid;place-items:center;flex:0 0 64px;width:64px;height:64px;padding-left:3px;border-radius:50%;background:var(--travel-gold);color:#172d32;box-shadow:0 0 0 8px #d3a87530;transition:transform .2s}
+.travel-editorial .destination-play:hover>span{transform:scale(1.07)}
+.travel-editorial .destination-play b{font-size:14px;font-weight:500}.travel-editorial .destination-play small{display:block;font-size:11px;opacity:.8;margin-top:4px}
+.travel-editorial .destination-introduction{display:grid;grid-template-columns:1fr 1.15fr;gap:90px;align-items:start}
+.travel-editorial .destination-introduction h2,.travel-editorial .destination-route-heading h2,.travel-editorial .destination-next h2{font-size:clamp(32px,3.7vw,52px);line-height:1.12;letter-spacing:-.035em;color:var(--travel-ink)}
+.travel-editorial .destination-facts{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px;font-size:12px}
+.travel-editorial .destination-facts span{border:1px solid #d2d5ce;border-radius:30px;padding:10px 16px}
+.travel-editorial .destination-route-section{background:#eaece6}
+.travel-editorial .destination-route-layout{display:grid;grid-template-columns:.8fr 1.2fr;gap:90px}
+.travel-editorial .destination-route-heading p:not(.eyebrow){font-size:15px;line-height:1.8;margin:25px 0}
+.travel-editorial .destination-days{list-style:none;padding:0;margin:0}
+.travel-editorial .destination-days li{display:grid;grid-template-columns:65px 1fr;gap:18px;border-top:1px solid #cdd3cb;padding:28px 0}
+.travel-editorial .destination-days li>span{font-size:11px;letter-spacing:.1em;color:#52675c;padding-top:5px}
+.travel-editorial .destination-days h3{font-size:22px;font-weight:500;line-height:1.3;margin:0 0 12px}
+.travel-editorial .destination-days p{font-size:15px;line-height:1.75;margin:0}
+.travel-editorial .destination-next{display:flex;align-items:center;justify-content:space-between;gap:40px}
+.travel-editorial .destination-next p{max-width:580px}
+.travel-editorial .destination-next .button{flex-shrink:0}
+.travel-editorial .destination-references{padding-bottom:65px}
+.travel-editorial .destination-references details{font-size:12px;line-height:1.8}
+.travel-editorial :focus-visible{outline:3px solid #b5874b;outline-offset:5px}
+.travel-editorial footer,.travel-editorial footer h3,.travel-editorial footer .wordmark{color:#f7f5f0}
+.travel-editorial .footer-top>div>a:not(.wordmark),.travel-editorial footer p,.travel-editorial footer .wordmark span,.travel-editorial .footer-bottom{color:#d0dad4}
+.destination-film-dialog{width:min(1000px,94vw);max-height:92svh;padding:28px;border:0;border-radius:10px;background:#142a32;color:white}
+.destination-film-dialog::backdrop{background:#051419db}
+.destination-film-dialog h2{font-size:25px;margin:10px 44px 22px 0;line-height:1.25}
+.destination-film-dialog .film-close{position:absolute;right:16px;top:13px;background:none;border:1px solid #ffffff60;border-radius:50%;width:40px;height:40px;color:#fff;font-size:27px;cursor:pointer}
+.destination-film-dialog video,.destination-film-dialog iframe{display:block;width:100%;aspect-ratio:16/9;max-height:62svh;background:#07151a;border:0}
+.destination-film-dialog [hidden]{display:none!important}
+.destination-film-dialog .film-credit{font-size:12px;line-height:1.8;color:#c9d4d6;margin:16px 0 0}
+.destination-film-dialog a{color:#f0cf9f;text-underline-offset:4px}
+.destination-film-dialog .film-external{padding:35px 0;line-height:1.8}
+.destination-film-dialog .film-external a{display:inline-block;margin-top:12px;font-size:17px}
+.destination-film-dialog :focus-visible{outline:3px solid #d3a875;outline-offset:4px}
+@media(max-width:900px){.travel-editorial .destination-introduction,.travel-editorial .destination-route-layout{gap:40px}.travel-editorial .destination-next{display:block}.travel-editorial .destination-next .button{margin-top:20px}.travel-editorial .destination-hero{min-height:600px}}
+@media(max-width:600px){.travel-editorial .destination-grid .destination-photo{height:240px}.travel-editorial .destination-introduction,.travel-editorial .destination-route-layout{grid-template-columns:1fr;gap:30px}.travel-editorial .destination-hero{min-height:620px;height:80svh}.travel-editorial .destination-hero-copy{padding-bottom:40px}.travel-editorial .destination-back{margin-bottom:65px}.travel-editorial .destination-hero h1{font-size:58px;overflow-wrap:normal}.travel-editorial .destination-days li{grid-template-columns:52px 1fr;gap:12px}.travel-editorial .destination-days h3{font-size:21px}.travel-editorial .editorial-photo{height:320px}.destination-film-dialog{padding:20px}.destination-film-dialog h2{font-size:20px}}
+@media(prefers-reduced-motion:reduce){.travel-editorial .destination-image-link img,.travel-editorial .destination-play>span{transition:none}}

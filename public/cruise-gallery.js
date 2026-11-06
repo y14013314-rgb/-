@@ -34,7 +34,7 @@ if(data){
   track.replaceChildren(...items.map((item,i)=>{const slide=prototype.cloneNode(true);slide.dataset.credit=item.credit;slide.setAttribute('aria-label',`${i+1} of ${items.length}`);const img=slide.querySelector('img');img.src=item.src;img.alt=item.title;img.loading=i?'lazy':'eager';img.removeAttribute('fetchpriority');const heading=slide.querySelector('h1,h2'),replacement=document.createElement(i?'h2':'h1');replacement.textContent=item.title;heading.replaceWith(replacement);return slide;}));
   dotBar.replaceChildren(...items.map((item,i)=>{const dot=document.createElement('button');dot.type='button';dot.setAttribute('aria-label',`Image ${i+1}: ${item.title}`);return dot;}));
   picker.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.galleryShip===name)));
-  document.getElementById('ship-gallery-note').textContent=['Gold 2','Gold 5'].includes(name)?`${name} · Destination scenery and labelled AI illustrations. Vessel and cabin photographs are not included in the supplied materials.`:`${name} · Ship and destination images from the supplied brochure. Facilities vary by cabin and sailing.`;
+  document.getElementById('ship-gallery-note').textContent=['Gold 2','Gold 5'].includes(name)?`${name} · Destination scenery from the supplied operator brochures; not photographs of this vessel. Vessel and cabin photographs are not included in the supplied materials.`:`${name} · Ship and destination images from the supplied brochure. Facilities vary by cabin and sailing.`;
   mount();
  }
  picker.forEach(b=>b.addEventListener('click',()=>{const name=b.dataset.galleryShip;show(name);if(ship&&ship.value!==name){ship.value=name;ship.dispatchEvent(new Event('change',{bubbles:true}));}}));
