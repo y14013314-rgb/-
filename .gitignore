@@ -46,3 +46,6 @@ yarn-error.log*
 
 # Standalone Worker output is packaged from dist.
 /worker/index.js
+
+# Cloudflare Pages preview output
+/pages-dist/

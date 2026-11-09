@@ -1,0 +1,104 @@
+{
+  "slug": "baiyun",
+  "title": "Baiyun",
+  "localTitle": "南方列车·白云号",
+  "description": "An 18-day journey from Guangzhou through Chongqing to the landscapes of Xinjiang, returning via Korla and Golmud.",
+  "year": 2027,
+  "days": 18,
+  "route": [
+    "Guangzhou",
+    "Chongqing",
+    "Urumqi",
+    "Altay",
+    "Ili",
+    "Kuqa",
+    "Kashgar",
+    "Korla",
+    "Golmud",
+    "Guangzhou"
+  ],
+  "image": {
+    "src": "/assets/trains/baiyun-salon.webp",
+    "alt": "Promotional onboard cultural salon illustration reproduced from the Baiyun brochure",
+    "credit": "Onboard cultural salon · promotional illustration extracted from the Baiyun brochure, PDF page 4; final configuration may differ."
+  },
+  "film": {
+    "src": "/assets/trains/anyi-reference.mp4",
+    "poster": "/assets/trains/anyi-poster.webp",
+    "credit": "Shared reference film: Anyi train · 安逸号. This film illustrates another train and is not footage of Baiyun. Your selected train’s own film will be added when available."
+  },
+  "price": {
+    "status": "on-request"
+  },
+  "highlights": [
+    {
+      "title": "Southern China to the Silk Road",
+      "description": "Begin in Guangzhou, with a Chongqing city visit before continuing towards Urumqi and Xinjiang."
+    },
+    {
+      "title": "A literary-inspired setting",
+      "description": "The brochure presents a Chinese literary-household design theme, with onboard cultural activities and a Silk Road salon."
+    },
+    {
+      "title": "Beyond the familiar circuit",
+      "description": "The return route includes Korla, Bosten Lake and Golmud’s Qarhan Salt Lake, as described in the 2027 itineraries."
+    }
+  ],
+  "editions": [
+    {
+      "title": "Golden Autumn · 金风画卷版",
+      "description": "The Ili B option visits Sayram Lake, Tianshan Flower Sea and Nalati before Kuqa. If the Duku road in option A is closed, the brochure substitutes option B."
+    },
+    {
+      "title": "Tianshan Edition · 天山锦书版",
+      "description": "The Ili B option includes Kalajun, light grassland walking and Kurdening. Its A-option fallback describes returning from Nalati to Yining and transferring to Jinxiu Tianfu for Kuqa; confirm this arrangement before booking."
+    },
+    {
+      "title": "Urumqi & Altay options",
+      "description": "Choose a Urumqi cultural visit or Tianchi Lake, followed by one of the fixed Hemu/Kanas touring programmes. The alternative Altay route includes Baihaba and the Tiereketi–Jiadengyu road."
+    },
+    {
+      "title": "Ili & Kuqa options · Days 8–11",
+      "description": "A includes Sayram Lake, Nalati and the Duku route. B differs between the two editions. C includes Yizhao Highway, Zhaosu Jade Lake, Xiata and Sayram Lake, continuing to Kuqa.",
+      "supplement": {
+        "option": "Ili & Kuqa option C",
+        "currency": "CNY",
+        "amount": 6000,
+        "unit": "person",
+        "source": "2027 operator brochures"
+      }
+    }
+  ],
+  "itinerary": [
+    {
+      "title": "Days 1–3 · Guangzhou, Chongqing & westbound rail",
+      "description": "Board in Guangzhou. The Chongqing programme lists the Three Gorges Museum, local hotpot and the Raffles City viewing platform before the onward rail journey."
+    },
+    {
+      "title": "Day 4 · Urumqi",
+      "description": "Choose the Xinjiang Museum and Grand Bazaar programme or Tianchi Lake."
+    },
+    {
+      "title": "Days 5–7 · Altay & Kanas",
+      "description": "Travel to Hemu and Kanas, with village or road options before continuing from Beitun."
+    },
+    {
+      "title": "Days 8–11 · Ili & Kuqa",
+      "description": "Choose one of the edition-specific grassland and mountain routes."
+    },
+    {
+      "title": "Days 12–14 · Kashgar & Korla",
+      "description": "White Sand Lake, Taxkorgan, a Tajik family visit, Karakul Lake and Kashgar Old City feature before continuing towards Korla."
+    },
+    {
+      "title": "Days 15–18 · Korla, Golmud & Guangzhou",
+      "description": "The brochure lists Bayingolin Museum and Bosten Lake, followed by Qarhan Salt Lake at Golmud and the return rail journey to Guangzhou."
+    }
+  ],
+  "planningNote": "The 2027 brochures are planning references. Departure dates, railway schedules, stops, hotel substitutions, service languages and availability must be confirmed for your booking. Rail travel is combined with road excursions and hotel stays; the complete journey is not spent on the train.",
+  "accessNote": "The brochures state that the Duku Highway is open to domestic guests only; overseas travelers need an alternative route confirmed. Border-area visits and high-altitude excursions require individual access checks. Cabin dimensions and detailed layouts were not supplied. Some brochure interiors are promotional illustrations rather than verified photographs.",
+  "sources": [
+    "【金风画卷版】2027年白云号新疆18日行程  07.1.pdf",
+    "【天山锦书版】2027年白云号新疆18日行程  07.1.pdf"
+  ]
+}

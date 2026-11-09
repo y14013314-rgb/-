@@ -1,0 +1,9 @@
+name = "sukha-pages-local"
+compatibility_date = "2026-05-15"
+pages_build_output_dir = "../pages-dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sukha-pages-local"
+database_id = "11111111-1111-4111-8111-111111111111"
+migrations_dir = "../drizzle"
