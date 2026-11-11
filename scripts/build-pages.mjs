@@ -28,6 +28,7 @@ if (product.slug !== 'baiyun' || product.price.status !== 'on-request') {
 }
 
 const template = readFileSync(join(root, 'pages/templates/train-detail.html'), 'utf8');
+writeFileSync(join(root, 'lib/content/train-template.mjs'), 'export default ' + JSON.stringify(template) + ';\n');
 const { detail, card } = renderTrain(product, template, origin);
 const collectionSource = readFileSync(join(source, collection, 'index.html'), 'utf8');
 const cardSlot = /<article class="cruise-collection-card" id="baiyun">[\s\S]*?<\/article>/;
@@ -61,7 +62,7 @@ writeFileSync(join(output, '_headers'), '/*\n  Referrer-Policy: no-referrer\n  X
 writeFileSync(join(output, '_redirects'), ['/payment', '/payment/', '/plan-my-trip', '/plan-my-trip/']
   .map(path => path + ' /#request-quote 302\n').join(''));
 writeFileSync(join(output, '_routes.json'), JSON.stringify({
-  version: 1, include: ['/api/inquiries', '/api/inquiries/', '/api/team/*'], exclude: [],
+  version: 1, include: ['/api/inquiries', '/api/inquiries/', '/api/team/*', '/silk-road-luxury-trains/', '/silk-road-luxury-trains/baiyun', '/silk-road-luxury-trains/baiyun/'], exclude: [],
 }) + '\n');
 writeFileSync(join(output, '404.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Page not found | SUKHA</title><h1>Page not found</h1><p><a href="/">Return to SUKHA</a></p></html>\n');
 console.log(`Pages ${live ? 'live' : 'preview'} built in ${output}`);
