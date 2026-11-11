@@ -5,7 +5,13 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const source = join(root, 'public');
 const output = join(root, 'pages-dist');
-const origin = new URL(process.env.CF_PAGES_URL || 'http://127.0.0.1:8788').origin;
+const live = process.env.SITE_URL === 'https://sukhatrip.com'
+  && (!process.env.CF_PAGES || process.env.CF_PAGES_BRANCH === 'codex/pages-preview');
+if (process.env.SITE_URL && process.env.SITE_URL !== 'https://sukhatrip.com') {
+  throw new Error('SITE_URL must be https://sukhatrip.com. Leave it unset for previews.');
+}
+const origin = live ? process.env.SITE_URL
+  : new URL(process.env.CF_PAGES_URL || 'http://127.0.0.1:8788').origin;
 const oldOrigin = 'https://sukha-travel-20261103.racinglight1.chatgpt.site';
 const collection = '/silk-road-luxury-trains/';
 const product = JSON.parse(readFileSync(join(root, 'content/products/baiyun.json'), 'utf8'));
@@ -78,11 +84,17 @@ for (const file of readdirSync(output, { recursive: true }).filter(file => file.
 const sitemap = readFileSync(join(source, 'sitemap.xml'), 'utf8');
 writeFileSync(join(output, 'sitemap.xml'), sitemap.replaceAll(oldOrigin, origin)
   .replace(/<url><loc>[^<]+\/(plan-my-trip|destinations|signature-experiences)\/<\/loc><\/url>/g, ''));
-writeFileSync(join(output, '_headers'), '/*\n  X-Robots-Tag: noindex\n  Referrer-Policy: no-referrer\n  X-Content-Type-Options: nosniff\n');
+writeFileSync(join(output, 'robots.txt'), live
+  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\nSitemap: ${origin}/sitemap.xml\n`
+  : 'User-agent: *\nDisallow: /\n');
+writeFileSync(join(output, '_headers'), '/*\n  Referrer-Policy: no-referrer\n  X-Content-Type-Options: nosniff\n'
+  + (live
+    ? '\nhttps://:project.pages.dev/*\n  X-Robots-Tag: noindex\n\nhttps://:version.:project.pages.dev/*\n  X-Robots-Tag: noindex\n'
+    : '  X-Robots-Tag: noindex\n'));
 writeFileSync(join(output, '_redirects'), ['/payment', '/payment/', '/plan-my-trip', '/plan-my-trip/']
   .map(path => path + ' /#request-quote 302\n').join(''));
 writeFileSync(join(output, '_routes.json'), JSON.stringify({
   version: 1, include: ['/api/inquiries', '/api/inquiries/'], exclude: [],
 }) + '\n');
 writeFileSync(join(output, '404.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Page not found | SUKHA</title><h1>Page not found</h1><p><a href="/">Return to SUKHA</a></p></html>\n');
-console.log('Pages preview built in ' + output);
+console.log(`Pages ${live ? 'live' : 'preview'} built in ${output}`);
