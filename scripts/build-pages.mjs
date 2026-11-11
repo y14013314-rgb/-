@@ -17,6 +17,7 @@ const oldOrigin = 'https://sukha-travel-20261103.racinglight1.chatgpt.site';
 const collection = '/silk-road-luxury-trains/';
 const product = JSON.parse(readFileSync(join(root, 'content/products/baiyun.json'), 'utf8'));
 const productUrl = collection + product.slug + '/';
+writeFileSync(join(root, 'lib/content/train-seed.mjs'), 'export default ' + JSON.stringify(product) + ';\n');
 const assets = [product.image.src, product.film.src, product.film.poster];
 for (const asset of assets) {
   if (!asset.startsWith('/assets/') || asset.includes('..') || !statSync(join(source, asset)).isFile()) {
