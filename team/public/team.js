@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);let challenge;
 async function api(action,body){const r=await fetch('/api/team/'+action,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok)throw new Error(v.error||'操作失败，请稍后再试。');return v;}
 async function showUser(user){$('send').hidden=true;$('verify').hidden=true;$('workspace').hidden=false;$('identity').textContent=user.email;$('message').textContent='';document.querySelector('main').classList.add('editing');await loadProduct();}
-async function action(form,fn){const buttons=form.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);$('message').textContent='正在处理…';try{await fn();}catch(e){$('message').textContent=e.message;}finally{buttons.forEach(b=>b.disabled=false);}}
+async function action(form,fn){const buttons=[...form.querySelectorAll('button')],disabled=buttons.map(b=>b.disabled);buttons.forEach(b=>b.disabled=true);$('message').textContent='正在处理…';try{await fn();}catch(e){$('message').textContent=e.message;}finally{buttons.forEach((b,i)=>b.disabled=disabled[i]);}}
 $('send').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{const v=await api('request-code',{email:$('email').value});challenge=v.challenge;$('send').hidden=true;$('verify').hidden=false;$('message').textContent='验证码邮件已提交发送，请检查收件箱和垃圾邮件。10 分钟内有效。';$('code').focus();});};
 $('verify').onsubmit=e=>{e.preventDefault();action(e.target,async()=>showUser(await api('verify',{challenge,code:$('code').value})));};
 $('back').onclick=()=>{challenge=null;$('code').value='';$('verify').hidden=true;$('send').hidden=false;$('message').textContent='';};
@@ -13,7 +13,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 function fields(value,path=[]){return Object.entries(value).filter(([k])=>k!=='slug').map(([k,v])=>{
  const p=[...path,k],key=esc(JSON.stringify(p)),label=labels[k]||k;
  if(Array.isArray(v)){
-  if(v.length===0||typeof v[0]==='string')return `<label>${esc(label)}<textarea data-path="${key}" data-type="lines" rows="4">${esc(v.join('\n'))}</textarea></label>`;
+  if(k==='route'||k==='sources')return `<label>${esc(label)}<textarea data-path="${key}" data-type="lines" rows="4">${esc(v.join('\n'))}</textarea></label>`;
   return `<fieldset><legend>${esc(label)}</legend>${v.map((x,i)=>`<fieldset><legend>第 ${i+1} 项</legend>${fields(x,[...p,i])}<button type="button" data-remove="${esc(JSON.stringify([...p,i]))}">删除此项</button></fieldset>`).join('')}<button type="button" data-add="${key}">添加一项</button></fieldset>`;
  }
  if(v&&typeof v==='object')return `<fieldset><legend>${esc(label)}</legend>${fields(v,p)}</fieldset>`;
