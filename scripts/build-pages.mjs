@@ -62,7 +62,7 @@ writeFileSync(join(output, '_headers'), '/*\n  Referrer-Policy: no-referrer\n  X
   + (live
     ? '\nhttps://:project.pages.dev/*\n  X-Robots-Tag: noindex\n\nhttps://:version.:project.pages.dev/*\n  X-Robots-Tag: noindex\n'
     : '  X-Robots-Tag: noindex\n')
-  + '\n/team/*\n  X-Robots-Tag: noindex\n  Cache-Control: no-store\n  Content-Security-Policy: default-src \'self\'; img-src \'self\' https: data: blob:; media-src \'self\' https: blob:; frame-ancestors \'none\'; base-uri \'none\'; form-action \'self\'\n');
+  + '\n/team/*\n  X-Robots-Tag: noindex\n  Cache-Control: no-store\n  Content-Security-Policy: default-src \'self\'; img-src \'self\' https: data: blob:; media-src \'self\' https: blob:; connect-src \'self\' https://upload.imagekit.io; frame-ancestors \'none\'; base-uri \'none\'; form-action \'self\'\n');
 writeFileSync(join(output, '_redirects'), ['/payment', '/payment/', '/plan-my-trip', '/plan-my-trip/']
   .map(path => path + ' /#request-quote 302\n').join(''));
 writeFileSync(join(output, '_routes.json'), JSON.stringify({

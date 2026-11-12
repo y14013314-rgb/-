@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {upload,image,maxImageBytes} from '../lib/content/media.mjs';
+import {videoAuth,maxVideoBytes} from '../lib/content/video.mjs';
 import {onMembers} from '../lib/content/members.mjs';
 import {member} from '../lib/content/auth.mjs';
 import {onContent} from '../lib/content/content-api.mjs';
@@ -25,6 +26,41 @@ async function setup(){
  const page=collection=>published({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/baiyun/'),next:async()=>new Response(collection?'<article class="cruise-collection-card" id="baiyun">original card</article>':'original page')},collection);
  return {env,call,page,sql,token};
 }
+test('video upload authorization enforces sessions, origin, configuration, rate and signed restrictions',async()=>{
+ const {env,token}=await setup();
+ const call=(options={})=>videoAuth({env,request:new Request('https://sukhatrip.com/api/team/video-auth',{method:options.method||'POST',headers:{Origin:options.origin||'https://sukhatrip.com',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})}})});
+ assert.equal((await call({anonymous:true})).status,401);
+ assert.equal((await call({origin:'https://evil.test'})).status,403);
+ assert.equal((await call({method:'GET'})).status,405);
+ assert.equal((await call()).status,503);
+ env.IMAGEKIT_PRIVATE_KEY='test-key-not-real';
+ const r=await call(),v=await r.json();assert.equal(r.status,200);assert.equal(r.headers.get('Cache-Control'),'no-store');
+ const [header,payload,signature]=v.token.split('.'),p=JSON.parse(Buffer.from(payload,'base64url'));
+ assert.equal(JSON.parse(Buffer.from(header,'base64url')).kid,'public_AwTSuxst7OTsYoBXsqHLDtLKIP4=');
+ assert.equal(p.exp-p.iat,600);assert.match(p.fileName,/^[a-f0-9-]+\.mp4$/);assert.equal(p.folder,'/sukha-videos');
+ assert.equal(p.checks,'"file.mime" IN ["video/mp4"] AND "file.size" > 0 AND "file.size" <= '+maxVideoBytes);
+ assert.equal(p.overwriteFile,'false');assert.deepEqual(v.parameters,Object.fromEntries(Object.entries(p).filter(([k])=>!['iat','exp'].includes(k))));
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.IMAGEKIT_PRIVATE_KEY),{name:'HMAC',hash:'SHA-256'},false,['verify']);
+ assert(await crypto.subtle.verify('HMAC',key,Buffer.from(signature,'base64url'),new TextEncoder().encode(header+'.'+payload)));
+ assert(!JSON.stringify(v).includes(env.IMAGEKIT_PRIVATE_KEY));
+ assert.notEqual((await (await call()).json()).token,v.token);
+ for(let i=2;i<30;i++)assert.equal((await call()).status,200);
+ assert.equal((await call()).status,429);
+});
+test('catalog videos preserve templates until saved and published, including pages without video',async()=>{
+ const {call,env}=await setup(),url='https://ik.imagekit.io/negxem1l9/C0642.MP4';
+ for(const slug of ['chengdu','classic-china','homepage']){
+  const p=structuredClone(catalog[slug].product),original=renderCatalogProduct(p,env.SITE_URL);p.videoUrl=url;validateCatalogProduct(p);
+  assert.equal((await call('save',{product:p,revision:0})).status,200);
+  const preview=await (await call('preview?slug='+slug)).text();assert(preview.includes(url));assert(!original.includes(url));
+  const rowBefore=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();assert.equal(rowBefore.published,null);
+  assert.equal((await call('publish',{slug,revision:1})).status,200);
+  const row=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();assert(renderCatalogProduct(JSON.parse(row.published),env.SITE_URL).includes(url));
+  p.videoUrl='javascript:alert(1)';assert.throws(()=>validateCatalogProduct(p));
+  p.videoUrl='';validateCatalogProduct(p);assert(!renderCatalogProduct(p,env.SITE_URL).includes('<video'));
+ }
+ const p=structuredClone(seed);p.film.src=url;validateProduct(p);assert(renderTrain(p,template,env.SITE_URL).detail.includes(url));
+});
 test('draft privacy, saved preview, publication and revision conflicts',async()=>{
  const {call,page}=await setup();
  assert.equal((await call('product',null,{anonymous:true})).status,401);

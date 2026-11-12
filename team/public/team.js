@@ -52,7 +52,7 @@ function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slu
  if(k==='status'&&path[0]==='price')return `<label>${esc(label)}<select data-path="${key}"><option value="on-request" ${v==='on-request'?'selected':''}>询价 · Price on request</option><option value="from" ${v==='from'?'selected':''}>每人起价 · From</option></select></label>`;
  const isImage=(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||fieldSpecs.find(f=>f.key===k)?.type==='image';
  if(isImage)return `<article class="media-card"><div class="media-frame"><img src="${esc(v)}" alt="${esc(label)}" loading="lazy"></div><div class="media-copy"><strong>${esc(label)}</strong><label class="upload-button">选择或更换图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label><small>支持 JPG、PNG、WebP，自动压缩</small><details><summary>使用已有图片链接</summary><textarea data-path="${key}">${esc(v)}</textarea></details></div></article>`;
- if(path[0]==='film'&&k==='src')return `<article class="media-card"><video controls preload="metadata" src="${esc(v)}"></video><div class="media-copy"><strong>产品视频</strong><p>视频文件上传需先启用存储。目前可以使用已有视频链接。</p><details><summary>修改视频链接</summary><textarea data-path="${key}">${esc(v)}</textarea></details></div></article>`;
+ if((path[0]==='film'&&k==='src')||k==='videoUrl')return `<article class="media-card">${v?`<video controls playsinline preload="metadata" src="${esc(v)}"></video>`:''}<div class="media-copy"><strong>产品视频</strong><p>选择 100 MB 以内的 MP4，建议使用 H.264 视频和 AAC 音频。上传后仍需保存草稿并发布。</p><label class="upload-button">选择或更换视频<input type="file" accept="video/mp4,.mp4" data-video-upload="${key}"></label><details><summary>修改视频链接</summary><textarea data-path="${key}">${esc(v)}</textarea></details></div></article>`;
  return `<label>${esc(label)}${typeof v==='number'?`<input type="number" step="any" data-path="${key}" data-type="number" value="${esc(v)}">`:`<textarea data-path="${key}" rows="${['description','planningNote','accessNote'].includes(k)?4:2}">${esc(v)}</textarea>`}</label>${(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||fieldSpecs.find(f=>f.key===k)?.type==='image'?`<label>从电脑上传图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label>`:''}`;
  }).join('');}
 function at(path){return path.reduce((x,k)=>x[k],product);}
@@ -63,7 +63,7 @@ function draw(){
  if(product.values){
   groups.basic.push(fields(product.slug==='homepage'?{title:product.title}:{title:product.title,placement:product.placement}));
   const media={},text={};for(const [key,value]of Object.entries(product.values))(fieldSpecs.find(f=>f.key===key)?.type==='image'?media:text)[key]=value;
-  groups.media.push(fields(media,['values']));groups.media.push(existingVideos.map(url=>`<article class="media-card"><video controls preload="none" src="${esc(url)}"></video><div class="media-copy"><strong>现有产品视频</strong><p>可播放预览，视频文件上传稍后接入。</p></div></article>`).join(''));groups.content.push(fields(text,['values']));groups.content.push(fields({sections:product.sections||[]}));
+  groups.media.push(fields(media,['values']));groups.media.push(fields({videoUrl:product.videoUrl??existingVideos[0]??''}));groups.content.push(fields(text,['values']));groups.content.push(fields({sections:product.sections||[]}));
  }else{
   for(const [key,value]of Object.entries(product)){if(['slug','templateSlug','featured'].includes(key))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
  }
@@ -73,6 +73,7 @@ function draw(){
  $('fields').innerHTML=available.map(k=>`<section class="editor-panel" data-panel="${k}" ${k===activeTab?'':'hidden'}>${groups[k].join('')}</section>`).join('');
  $('editor-tabs').querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;$('fields').querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==activeTab);$('editor-tabs').querySelectorAll('[data-tab]').forEach(t=>t.setAttribute('aria-pressed',String(t.dataset.tab===activeTab)));});
  $('fields').querySelectorAll('[data-path]').forEach(input=>{input.oninput=()=>{const p=JSON.parse(input.dataset.path),key=p.pop();at(p)[key]=input.dataset.type==='boolean'?input.checked:input.dataset.type==='number'?Number(input.value):input.dataset.type==='lines'?input.value.split('\n').filter(s=>s.trim()):input.value;dirty=true;};input.onchange=input.oninput;});
+ $('fields').querySelectorAll('[data-video-upload]').forEach(input=>input.onchange=()=>uploadVideo(input));
  $('fields').querySelectorAll('[data-upload]').forEach(input=>input.onchange=()=>uploadImage(input));
  $('fields').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{if(!confirm('删除这条内容？保存并发布后才影响官网。'))return;const p=JSON.parse(b.dataset.remove),i=p.pop();at(p).splice(i,1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const a=at(JSON.parse(b.dataset.add));a.push({title:'',description:''});dirty=true;draw();});
@@ -111,4 +112,28 @@ async function uploadImage(input){
   if(product!==uploadProduct)throw new Error('当前产品已切换，本次上传未应用。请在目标产品重新选择图片。');
   const p=JSON.parse(input.dataset.upload),key=p.pop();at(p)[key]=v.url;dirty=true;draw();$('message').textContent='图片已上传。请保存草稿并预览，发布后才会更换官网图片。';
  }catch(e){$('message').textContent=e.message;}finally{input.disabled=false;input.value='';}
+}
+
+async function uploadVideo(input){
+ const file=input.files[0];if(!file)return;
+ if(!/\.mp4$/i.test(file.name)||!['','video/mp4'].includes(file.type)||!file.size||file.size>100000000){$('message').textContent='请选择 100 MB 以内的 MP4 视频。';input.value='';return;}
+ const uploadProduct=product,workspace=$('workspace'),wasInert=Boolean(workspace.inert);workspace.inert=true;
+ $('message').textContent='正在准备视频上传…';
+ try{
+  const auth=await api('video-auth',{}),form=new FormData();form.append('file',file);form.append('token',auth.token);
+  for(const [key,value]of Object.entries(auth.parameters))form.append(key,value);
+  const result=await new Promise((resolve,reject)=>{
+   const xhr=new XMLHttpRequest();xhr.open('POST','https://upload.imagekit.io/api/v2/files/upload');xhr.timeout=600000;
+   xhr.upload.onprogress=e=>{if(e.lengthComputable)$('message').textContent='正在上传视频：'+Math.round(e.loaded/e.total*100)+'%（传输完成后仍需等待处理）';};
+   xhr.onerror=xhr.ontimeout=()=>reject(new Error('视频上传连接中断，结果未确认。当前修改已保留；请先到 ImageKit 素材库查看，避免重复上传。'));
+   xhr.onload=()=>{let v;try{v=JSON.parse(xhr.responseText);}catch{reject(new Error('未能确认视频上传结果，请到 ImageKit 素材库查看。'));return;}
+    if(xhr.status<200||xhr.status>=300){reject(new Error('视频上传失败：请检查 MP4 格式、100 MB 大小限制及 ImageKit 账户额度。'));return;}
+    resolve(v);
+   };xhr.send(form);
+  });
+  if(typeof result.url!=='string'||!result.url.startsWith('https://ik.imagekit.io/negxem1l9/')||/[<>"'\s\\]/.test(result.url))throw new Error('视频已上传，但返回地址异常，请到 ImageKit 素材库核对。');
+  if(product!==uploadProduct)throw new Error('当前产品已切换，视频未应用。请从 ImageKit 素材库复制链接到目标产品。');
+  const path=JSON.parse(input.dataset.videoUpload),key=path.pop();at(path)[key]=result.url;dirty=true;draw();
+  $('message').textContent='视频已上传。请保存草稿并预览，发布后才会更新官网。';
+ }catch(error){$('message').textContent=error.message;}finally{workspace.inert=wasInert;input.value='';}
 }
