@@ -1,4 +1,5 @@
-import {updateCards} from '../lib/content/catalog-published.mjs';
+import {onRequest as sitemapRequest} from '../functions/sitemap.xml.js';
+import {onCatalogPage,catalogCollection,updateCards} from '../lib/content/catalog-published.mjs';
 import {catalog,validateCatalogProduct,renderCatalogProduct} from '../lib/content/catalog-product.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ async function setup(){
  const db={async batch(statements){return Promise.all(statements.map(s=>s.run()));},prepare(query){let values=[];return {bind(...v){values=v;return this;},async first(){return sql.prepare(query).get(...values)||null;},async all(){return {results:sql.prepare(query).all(...values)};},async run(){return sql.prepare(query).run(...values);}};}};
  const token=crypto.randomUUID()+crypto.randomUUID();sql.prepare('INSERT INTO login_sessions VALUES (?,?,?)').run(await digest(token),'owner@example.test',Date.now()+60000);
  const env={TEAM_DB:db,TEAM_ADMIN_EMAIL:'owner@example.test',TEAM_PUBLISH:'1',SITE_URL:'https://sukhatrip.com'};
- const call=(action,body,options={})=>(action==='members'?onMembers:onContent)({env,params:{action},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:options.origin||'https://sukhatrip.com','Content-Type':'application/json',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})},...(body?{body:JSON.stringify(body)}:{})})});
+ const call=(action,body,options={})=>(action==='members'?onMembers:onContent)({env,params:{action:action.split('?')[0]},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:options.origin||'https://sukhatrip.com','Content-Type':'application/json',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})},...(body?{body:JSON.stringify(body)}:{})})});
  const page=collection=>published({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/baiyun/'),next:async()=>new Response(collection?'<article class="cruise-collection-card" id="baiyun">original card</article>':'original page')},collection);
  return {env,call,page,sql,token};
 }
@@ -64,7 +65,7 @@ test('member grants, self-publication and immediate revocation',async()=>{
  const listing=await (await call('members')).json();assert.equal(listing.members.length,1);
  assert.equal((await call('members',{email:'owner@example.test',active:false})).status,400);
  const token=crypto.randomUUID()+crypto.randomUUID();sql.prepare('INSERT INTO login_sessions VALUES (?,?,?)').run(await digest(token),'staff@example.test',Date.now()+60000);
- const invoke=(handler,action,body)=>handler({env,params:{action},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:'https://sukhatrip.com','Content-Type':'application/json',Cookie:'__Host-sukha-team='+token},...(body?{body:JSON.stringify(body)}:{})})});
+ const invoke=(handler,action,body)=>handler({env,params:{action:action.split('?')[0]},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:'https://sukhatrip.com','Content-Type':'application/json',Cookie:'__Host-sukha-team='+token},...(body?{body:JSON.stringify(body)}:{})})});
  assert.equal((await invoke(onMembers,'members')).status,403);
  assert.equal((await (await invoke(onContent,'product')).json()).canPublish,true);
  assert.equal((await invoke(onContent,'publish',{revision:0})).status,409);
@@ -90,8 +91,8 @@ test('image upload permission, byte limits and public image response',async()=>{
  const p=structuredClone(seed);p.image.src=url;validateProduct(p);
 });
 
-test('seven catalog products keep drafts separate and render escaped updates',async()=>{
- const {call}=await setup();assert.equal(Object.keys(catalog).length,7);
+test('catalog products and homepage keep drafts separate and render escaped updates',async()=>{
+ const {call}=await setup();assert.equal(Object.keys(catalog).length,18);
  for(const [slug,e] of Object.entries(catalog)){
   const p=structuredClone(e.product);validateCatalogProduct(p);p.title='Edited '+slug;
   const text=e.fields.find(f=>f.type==='text');p.values[text.key]='<script>unsafe</script>';
@@ -106,4 +107,40 @@ test('published catalog name updates matching collection card only',()=>{
  const e=catalog['chengdu'],p=structuredClone(e.product);p.title='New & Name';
  const html='<article><a href="'+e.path+'">Photo</a><h2>Old name</h2></article><article><h2>Other product</h2></article>';
  const result=updateCards(html,[{slug:p.slug,published:JSON.stringify(p)}]);assert(result.includes('<h2>New &amp; Name</h2>'));assert(result.includes('<h2>Other product</h2>'));
+});
+
+test('create, publish, feature, unpublish and relaunch a new private journey',async()=>{
+ const {call,env}=await setup();const slug='new-family-journey';
+ assert.equal((await call('create',{slug,title:'Family Journey',baseSlug:'classic-china'})).status,201);
+ assert.equal((await call('create',{slug,title:'Duplicate',baseSlug:'classic-china'})).status,409);
+ assert.equal((await call('create',{slug:'invalid-template',title:'Bad',baseSlug:'homepage'})).status,400);
+ let item=await (await call('product?slug='+slug)).json();assert.equal(item.product.templateSlug,'classic-china');assert.equal(item.url,'/journeys/'+slug+'/');
+ const page=()=>onCatalogPage({env,params:{slug},request:new Request('https://sukhatrip.com/journeys/'+slug+'/'),next:async()=>new Response('missing',{status:404})});
+ assert.equal((await page()).status,404);
+ item.product.featured=true;item.product.sections=[{title:'Day 20',description:'Additional touring day <safe>'}];assert.equal((await call('save',{product:item.product,revision:1})).status,200);
+ assert.equal((await call('publish',{slug,revision:2})).status,200);
+ const live=await page();assert.equal(live.status,200);const html=await live.text();assert(html.includes('Family Journey'));assert(html.includes('Additional touring day &lt;safe&gt;'));assert(html.includes('https://sukhatrip.com/journeys/'+slug+'/'));
+ const collection=path=>catalogCollection({env,request:new Request('https://sukhatrip.com'+path),next:async()=>new Response('<main></main>',{headers:{'Content-Type':'text/html'}})});
+ assert((await (await collection('/private-china-tours/')).text()).includes('/journeys/'+slug+'/'));
+ assert((await (await collection('/')).text()).includes('/journeys/'+slug+'/'));
+ const sitemap=()=>sitemapRequest({env,request:new Request('https://sukhatrip.com/sitemap.xml'),next:async()=>new Response('<urlset></urlset>')});
+ assert((await (await sitemap()).text()).includes('/journeys/'+slug+'/'));
+ assert.equal((await call('unpublish',{slug,revision:3})).status,200);assert.equal((await page()).status,404);
+ assert(!(await (await collection('/private-china-tours/')).text()).includes('/journeys/'+slug+'/'));
+ assert(!(await (await sitemap()).text()).includes('/journeys/'+slug+'/'));
+ assert.equal((await call('publish',{slug,revision:4})).status,200);assert.equal((await page()).status,200);
+});
+test('existing products can be withdrawn without erasing drafts and homepage stays available',async()=>{
+ const {call,env}=await setup();assert.equal((await call('unpublish',{slug:'chengdu',revision:0})).status,200);
+ const item=await (await call('product?slug=chengdu')).json();assert.equal(item.hidden,true);assert(item.product.title);
+ const page=await onCatalogPage({env,params:{slug:'chengdu'},request:new Request('https://sukhatrip.com/silk-road-luxury-trains/chengdu/'),next:async()=>new Response('existing content')});assert.equal(page.status,404);
+ assert.equal((await call('unpublish',{slug:'homepage',revision:0})).status,400);
+ const home=await (await call('product?slug=homepage')).json();assert(home.fields.length>0);assert.equal(home.canUnpublish,false);
+ assert.equal((await call('save',{product:home.product,revision:0})).status,200);assert.equal((await call('publish',{slug:'homepage',revision:1})).status,200);
+ const list=await (await call('products')).json();assert.equal(list.products.length,19);assert(list.templates.every(p=>p.slug!=='homepage'));
+});
+test('new Baiyun-based product retains structured editing and its own URL',async()=>{
+ const {call,env}=await setup();const slug='new-rail';assert.equal((await call('create',{slug,title:'New Rail',baseSlug:'baiyun'})).status,201);
+ const item=await (await call('product?slug='+slug)).json();assert(item.product.itinerary);assert.equal((await call('save',{revision:1,product:item.product})).status,200);assert.equal((await call('publish',{slug,revision:2})).status,200);
+ const page=await onCatalogPage({env,params:{slug},request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'+slug+'/'),next:async()=>new Response('missing',{status:404})});assert.equal(page.status,200);assert((await page.text()).includes('New Rail'));
 });
