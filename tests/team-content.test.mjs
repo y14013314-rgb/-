@@ -1,3 +1,4 @@
+import {onRequest as trainCollectionRequest} from '../functions/silk-road-luxury-trains/index.js';
 import {onRequest as sitemapRequest} from '../functions/sitemap.xml.js';
 import {onCatalogPage,catalogCollection,updateCards} from '../lib/content/catalog-published.mjs';
 import {catalog,validateCatalogProduct,renderCatalogProduct} from '../lib/content/catalog-product.mjs';
@@ -197,4 +198,27 @@ test('existing placements stay unchanged and rail products can choose the main c
  const start=html.indexOf('id="destinations"'),end=html.indexOf('</section>',start);assert(html.slice(start,end).includes('/journeys/classic-china/'));assert(!html.slice(end).includes('/journeys/classic-china/'));
  await call('create',{slug:'rail-location',title:'Rail placement',baseSlug:'baiyun'});const rail=await (await call('product?slug=rail-location')).json();assert.equal(rail.product.placement,'collection');assert.deepEqual(rail.placements.map(x=>x.value),['collection','more']);saved=await (await call('save',{product:rail.product,revision:rail.revision})).json();await call('publish',{slug:rail.product.slug,revision:saved.revision});
  const railHtml=await (await catalogCollection({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'),next:async()=>new Response(readFileSync(new URL('../public/silk-road-luxury-trains/index.html',import.meta.url),'utf8'))})).text();const a=railHtml.indexOf('id="train-collection"'),b=railHtml.indexOf('</section>',a);assert(railHtml.slice(a,b).includes('/silk-road-luxury-trains/rail-location/'));assert(!railHtml.includes('More journeys to discover.'));
+});
+
+test('authenticated collection preview shows saved placement without publishing or leaking other drafts',async()=>{
+ const {call,env,token,sql}=await setup();
+ await call('create',{slug:'preview-location',title:'Saved preview only',baseSlug:'classic-china'});
+ await call('create',{slug:'private-other',title:'Other private draft',baseSlug:'classic-china'});
+ let item=await (await call('product?slug=preview-location')).json();item.product.placement='destinations';
+ const saved=await (await call('save',{product:item.product,revision:item.revision})).json();
+ item=await (await call('product?slug=preview-location')).json();assert.equal(item.collectionPreviewUrl,'/private-china-tours/?team-preview=preview-location#destinations');
+ const source=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ const render=(query='',authorized=true)=>catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'+query,{headers:authorized?{Cookie:'__Host-sukha-team='+token}:{}}),next:async()=>new Response(source)});
+ const before=sql.prepare('SELECT * FROM product_content').all();
+ assert.equal((await render('?team-preview=preview-location',false)).status,401);
+ const preview=await render('?team-preview=preview-location');assert.equal(preview.headers.get('X-Robots-Tag'),'noindex, nofollow');assert.match(preview.headers.get('Cache-Control'),/private, no-store/);
+ const html=await preview.text(),start=html.indexOf('id="destinations"'),end=html.indexOf('</section>',start);
+ assert(html.includes('草稿位置预览'));assert(html.slice(start,end).includes('Saved preview only'));assert(html.includes('/api/team/preview?slug=preview-location'));assert(!html.includes('Other private draft'));assert(!(await (await render()).text()).includes('Saved preview only'));assert.deepEqual(sql.prepare('SELECT * FROM product_content').all(),before);
+ await call('unpublish',{slug:'preview-location',revision:saved.revision});assert((await (await render('?team-preview=preview-location')).text()).includes('Saved preview only'));
+ assert.equal((await render('?team-preview=missing')).status,404);
+});
+
+test('withdrawn built-in Baiyun can preview its original collection position',async()=>{
+ const {call,env,token}=await setup();let item=await (await call('product?slug=baiyun')).json();item.product.title='Hidden train draft';let saved=await (await call('save',{product:item.product,revision:0})).json();await call('unpublish',{slug:'baiyun',revision:saved.revision});
+ const result=await trainCollectionRequest({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/?team-preview=baiyun',{headers:{Cookie:'__Host-sukha-team='+token}}),next:async()=>new Response(readFileSync(new URL('../public/silk-road-luxury-trains/index.html',import.meta.url),'utf8'))});assert((await result.text()).includes('Hidden train draft'));assert.equal(result.headers.get('X-Robots-Tag'),'noindex, nofollow');
 });
