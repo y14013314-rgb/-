@@ -144,3 +144,24 @@ test('new Baiyun-based product retains structured editing and its own URL',async
  const item=await (await call('product?slug='+slug)).json();assert(item.product.itinerary);assert.equal((await call('save',{revision:1,product:item.product})).status,200);assert.equal((await call('publish',{slug,revision:2})).status,200);
  const page=await onCatalogPage({env,params:{slug},request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'+slug+'/'),next:async()=>new Response('missing',{status:404})});assert.equal(page.status,200);assert((await page.text()).includes('New Rail'));
 });
+
+test('delete removes only unpublished or withdrawn custom records and rejects stale requests',async()=>{
+ const {call,env}=await setup();const slug='delete-test';
+ assert.equal((await call('delete',{slug:'baiyun',revision:0})).status,400);
+ assert.equal((await call('delete',{slug:'homepage',revision:0})).status,400);
+ assert.equal((await call('create',{slug,title:'Delete test',baseSlug:'classic-china'})).status,201);
+ const item=await (await call('product?slug='+slug)).json();assert.equal(item.canDelete,true);
+ assert.equal((await call('delete',{slug,revision:0})).status,409);
+ assert.equal((await call('publish',{slug,revision:1})).status,200);
+ assert.equal((await call('delete',{slug,revision:2})).status,409);
+ assert.equal((await call('unpublish',{slug,revision:2})).status,200);
+ assert.equal((await call('delete',{slug,revision:2})).status,409);
+ env.TEAM_PUBLISH='0';assert.equal((await call('delete',{slug,revision:3})).status,403);env.TEAM_PUBLISH='1';
+ assert.equal((await call('delete',{slug,revision:3}, {anonymous:true})).status,401);
+ assert.equal((await call('delete',{slug,revision:3}, {origin:'https://evil.test'})).status,403);
+ assert.equal((await call('delete',{slug,revision:3})).status,200);
+ assert.equal((await call('product?slug='+slug)).status,404);
+ const list=await (await call('products')).json();assert(!list.products.some(p=>p.slug===slug));
+ assert.equal((await call('create',{slug:'draft-delete',title:'Draft',baseSlug:'baiyun'})).status,201);
+ assert.equal((await call('delete',{slug:'draft-delete',revision:1})).status,200);
+});
