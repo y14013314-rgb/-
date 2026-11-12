@@ -1,2 +1,3 @@
 import { published } from '../../lib/content/published.mjs';
-export const onRequest = context => published(context,true);
+import { catalogCollection } from '../../lib/content/catalog-published.mjs';
+export const onRequest = async context => catalogCollection(context,await published(context,true));

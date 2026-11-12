@@ -1,3 +1,4 @@
+import { buildCatalog } from './catalog.mjs';
 import { renderTrain } from '../lib/content/render-train.mjs';
 import { cpSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -5,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const source = join(root, 'public');
+const catalog = buildCatalog(root);
+writeFileSync(join(root, 'lib/content/catalog-seed.mjs'), 'export default ' + JSON.stringify(catalog) + ';\n');
 const output = join(root, 'pages-dist');
 const live = process.env.SITE_URL === 'https://sukhatrip.com'
   && (!process.env.CF_PAGES || process.env.CF_PAGES_BRANCH === 'codex/pages-preview');
@@ -63,7 +66,7 @@ writeFileSync(join(output, '_headers'), '/*\n  Referrer-Policy: no-referrer\n  X
 writeFileSync(join(output, '_redirects'), ['/payment', '/payment/', '/plan-my-trip', '/plan-my-trip/']
   .map(path => path + ' /#request-quote 302\n').join(''));
 writeFileSync(join(output, '_routes.json'), JSON.stringify({
-  version: 1, include: ['/api/inquiries', '/api/inquiries/', '/api/team/*', '/media/*', '/silk-road-luxury-trains/', '/silk-road-luxury-trains/baiyun', '/silk-road-luxury-trains/baiyun/'], exclude: [],
+  version: 1, include: ['/api/inquiries', '/api/inquiries/', '/api/team/*', '/media/*', '/silk-road-luxury-trains/', '/yangtze-river-cruises/', '/silk-road-luxury-trains/baiyun', '/silk-road-luxury-trains/baiyun/', ...Object.values(catalog).map(p=>p.path)], exclude: [],
 }) + '\n');
 writeFileSync(join(output, '404.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Page not found | SUKHA</title><h1>Page not found</h1><p><a href="/">Return to SUKHA</a></p></html>\n');
 console.log(`Pages ${live ? 'live' : 'preview'} built in ${output}`);

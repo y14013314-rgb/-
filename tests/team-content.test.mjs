@@ -1,3 +1,5 @@
+import {updateCards} from '../lib/content/catalog-published.mjs';
+import {catalog,validateCatalogProduct,renderCatalogProduct} from '../lib/content/catalog-product.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -84,4 +86,22 @@ test('image upload permission, byte limits and public image response',async()=>{
  const served=await image({env,params:{id:url.split('/').pop()},request:new Request('https://sukhatrip.com'+url)});
  assert.equal(served.headers.get('Content-Type'),'image/webp');assert.deepEqual(new Uint8Array(await served.arrayBuffer()),new Uint8Array(bytes));
  const p=structuredClone(seed);p.image.src=url;validateProduct(p);
+});
+
+test('seven catalog products keep drafts separate and render escaped updates',async()=>{
+ const {call}=await setup();assert.equal(Object.keys(catalog).length,7);
+ for(const [slug,e] of Object.entries(catalog)){
+  const p=structuredClone(e.product);validateCatalogProduct(p);p.title='Edited '+slug;
+  const text=e.fields.find(f=>f.type==='text');p.values[text.key]='<script>unsafe</script>';
+  const html=renderCatalogProduct(p,'https://sukhatrip.com');assert(html.includes('Edited '+slug));assert(!html.includes('<script>unsafe</script>'));assert(!html.includes('{{CMS_'));
+  assert.equal((await call('save',{product:p,revision:0})).status,200);
+  assert.equal((await call('publish',{slug,revision:1})).status,200);
+ }
+ assert.equal((await call('save',{product:{slug:'unlisted'},revision:0})).status,404);
+});
+
+test('published catalog name updates matching collection card only',()=>{
+ const e=catalog['chengdu'],p=structuredClone(e.product);p.title='New & Name';
+ const html='<article><a href="'+e.path+'">Photo</a><h2>Old name</h2></article><article><h2>Other product</h2></article>';
+ const result=updateCards(html,[{slug:p.slug,published:JSON.stringify(p)}]);assert(result.includes('<h2>New &amp; Name</h2>'));assert(result.includes('<h2>Other product</h2>'));
 });
