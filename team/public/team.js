@@ -5,12 +5,24 @@ function requireLogin(){
  $('email').value=$('identity').textContent;
  $('send').scrollIntoView({block:'center',behavior:'smooth'});
 }
-async function api(action,body){const r=await fetch('/api/team/'+action,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok){
+async function api(action,body){let r,v;try{r=await fetch('/api/team/'+action,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});v=await r.json();}catch{
+ const error=new Error('连接中断，未能确认操作结果。当前修改仍保留，请勿刷新页面，稍后再试。');error.connectionLost=true;throw error;
+}if(!r.ok){
  if(r.status===401&&!['me','verify','request-code'].includes(action)){
   requireLogin();throw new Error('登录状态已失效，请在上方重新获取验证码。当前未保存的修改仍保留在本页面，重新登录后可继续保存，请勿刷新。');
  }
  throw new Error(v.error||'操作失败，请稍后再试。');
 }return v;}
+async function saveDraft(){
+ try{const v=await api('save',{product,revision});revision=v.revision;}
+ catch(error){
+  if(!error.connectionLost)throw error;
+  let saved;try{saved=await api('product?slug='+encodeURIComponent(selectedSlug));}catch{throw error;}
+  if(JSON.stringify(saved.product)!==JSON.stringify(product))throw error;
+  revision=saved.revision;
+ }
+ dirty=false;$('message').textContent='草稿已保存。请预览，确认后再发布。';
+}
 async function showUser(user){
  $('send').hidden=true;$('verify').hidden=true;$('workspace').hidden=false;$('identity').textContent=user.email;
  $('session-title').textContent='登录成功';document.querySelector('main').classList.add('editing');
@@ -65,7 +77,7 @@ function draw(){
  $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const a=at(JSON.parse(b.dataset.add));a.push({title:'',description:''});dirty=true;draw();});
 }
 async function loadProduct(slug=selectedSlug){const v=await api('product?slug='+encodeURIComponent(slug));selectedSlug=slug;$('product-select').value=slug;product=v.product;placementChoices=v.placements||[];fieldSpecs=v.fields||[];existingVideos=v.videos||[];revision=v.revision;dirty=false;if(product.slug!=='homepage'&&product.featured===undefined)product.featured=false;draw();$('live-link').href=v.url;$('delete-product').hidden=!v.canDelete;$('delete-product').disabled=!v.canPublish||Boolean(v.publishedAt&&!v.hidden);$('unpublish').hidden=!v.canUnpublish;$('unpublish').disabled=!v.canPublish||v.hidden;$('preview').href='/api/team/preview?slug='+encodeURIComponent(selectedSlug);$('publish').disabled=!v.canPublish;document.querySelectorAll('[data-product]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.product===selectedSlug)));$('publication').textContent=v.hidden?'已下架；保存后重新发布即可上架。':v.publishedAt?'最近发布：'+new Date(v.publishedAt).toLocaleString('zh-CN'):'尚未通过后台发布，官网仍使用原内容。';}
-$('editor').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{const v=await api('save',{product,revision});revision=v.revision;dirty=false;$('message').textContent='草稿已保存。请预览，确认后再发布。';});};
+$('editor').onsubmit=e=>{e.preventDefault();action(e.target,saveDraft);};
 $('preview').onclick=e=>{if(dirty){e.preventDefault();$('message').textContent='请先保存草稿，再打开预览。';}};
 $('publish').onclick=()=>{if(dirty){$('message').textContent='请先保存草稿并预览。';return;}if(!confirm('确认将当前所选产品的已保存草稿发布到正式官网？'))return;action($('editor'),async()=>{const v=await api('publish',{revision,slug:selectedSlug});revision=v.revision;$('publication').textContent='最近发布：'+new Date(v.published_at).toLocaleString('zh-CN');$('message').textContent='已发布。可点击“查看官网”核对。';$('unpublish').disabled=selectedSlug==='homepage';$('delete-product').disabled=true;await loadProducts();});};
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});

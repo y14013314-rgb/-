@@ -19,3 +19,15 @@ test('expired save reveals login and reauthentication preserves unsaved text',as
  assert.match(context.ui.fields({placement:'destinations'}),/目的地探索/);assert.match(context.ui.fields({placement:'destinations'}),/value="destinations" selected/);
  assert.equal(get('send').hidden,true);assert.match(get('message').textContent,/未保存的修改已保留/);
 });
+
+test('lost save response is reconciled by reading the draft without repeating the write',async()=>{
+ const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,{value:'',textContent:'',querySelectorAll:()=>[]});return elements.get(id);};
+ const context=vm.createContext({document:{getElementById:get},window:{addEventListener(){}},fetch:async()=>({ok:false,status:401,json:async()=>({})})});
+ vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+`
+ globalThis.ui={saveDraft,setDraft(){product={slug:'123',title:'测试',placement:'destinations'};selectedSlug='123';revision=1;dirty=true;},state(){return {revision,dirty,product};}};`,context);
+ context.ui.setDraft();const calls=[];context.fetch=async(url)=>{calls.push(url);if(url.endsWith('/save'))throw new TypeError('Failed to fetch');return {ok:true,json:async()=>({product:{slug:'123',title:'测试',placement:'destinations'},revision:2})};};
+ await context.ui.saveDraft();assert.equal(context.ui.state().revision,2);assert.equal(context.ui.state().dirty,false);assert.equal(calls.filter(x=>x.endsWith('/save')).length,1);assert.match(get('message').textContent,/草稿已保存/);
+ context.ui.setDraft();context.fetch=async(url)=>{if(url.endsWith('/save'))throw new TypeError('Failed to fetch');return {ok:true,json:async()=>({product:{slug:'123',title:'Older'},revision:1})};};
+ await assert.rejects(context.ui.saveDraft(),/连接中断/);assert.equal(context.ui.state().dirty,true);assert.equal(context.ui.state().product.title,'测试');assert.equal(context.ui.state().revision,1);
+ context.fetch=async()=>{throw new TypeError('Failed to fetch');};await assert.rejects(context.ui.saveDraft(),/请勿刷新/);assert.equal(context.ui.state().dirty,true);
+});
