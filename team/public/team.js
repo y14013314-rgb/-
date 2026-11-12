@@ -29,6 +29,8 @@ async function showUser(user){
  $('session-title').textContent='登录成功';document.querySelector('main').classList.add('editing');
  if(product&&dirty){$('message').textContent='已重新登录，未保存的修改已保留。请点击保存草稿。';}
  else{$('message').textContent='';await loadProducts();await loadProduct();}
+ $('inquiry-notifications').hidden=user.role!=='admin';
+ if(user.role==='admin')await loadNotifications();
  if(user.role==='admin'){$('members').hidden=false;await loadMembers();}else{$('members').hidden=true;}
 }
 async function action(form,fn){const wasInert=Boolean(form.inert);form.inert=true;$('message').textContent='正在处理…';try{await fn();}catch(e){$('message').textContent=e.message;}finally{form.inert=wasInert;}}
@@ -137,3 +139,10 @@ async function uploadVideo(input){
   $('message').textContent='视频已上传。请保存草稿并预览，发布后才会更新官网。';
  }catch(error){$('message').textContent=error.message;}finally{workspace.inert=wasInert;input.value='';}
 }
+
+async function loadNotifications(){
+ try{const v=await api('inquiry-notifications');$('notification-list').innerHTML=v.notifications.map(n=>`<article><strong>${esc(n.reference)}</strong> · ${esc(new Date(n.createdAt).toLocaleString('zh-CN'))}<div>${esc(n.name)} · ${esc(n.email)}</div><pre style="white-space:pre-wrap">${esc(n.summary)}</pre><button type="button" data-retry-notification="${esc(n.reference)}">${n.status==='sending'?'核对或重试通知':'重试邮件通知'}</button></article>`).join('')||'<p>目前没有待处理通知。</p>';
+ $('notification-list').querySelectorAll('[data-retry-notification]').forEach(b=>b.onclick=()=>action($('inquiry-notifications'),async()=>{const v=await api('inquiry-notifications',{reference:b.dataset.retryNotification});$('notification-status').textContent=v.emailSent?'邮件服务已接受通知，请核对收件箱。':'通知尚未确认，请稍后再试；询盘记录仍保留。';await loadNotifications();}));
+ }catch(e){$('notification-status').textContent=e.message;}
+}
+$('refresh-notifications').onclick=()=>action($('inquiry-notifications'),loadNotifications);

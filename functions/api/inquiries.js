@@ -1,39 +1,9 @@
+import {notify} from '../../lib/content/inquiry-notifications.mjs';
 const respond = (body, status = 200) => Response.json(body, {
   status,
   headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
 });
 
-async function notify(env, host, notification, inquiry, reference) {
-  if (notification.status === 'sent') return true;
-
-  const localSink = host === '127.0.0.1' && env.INQUIRY_LOCAL_MAIL === '1';
-  if (!notification.recipient || !env.INQUIRY_FROM || (!localSink && !env.RESEND_API_KEY)) return false;
-
-  try {
-    const response = await fetch(localSink ? 'http://127.0.0.1:8789/emails' : 'https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': reference,
-        ...(localSink ? {} : { Authorization: 'Bearer ' + env.RESEND_API_KEY }),
-      },
-      signal: AbortSignal.timeout(5000),
-      body: JSON.stringify({
-        from: env.INQUIRY_FROM,
-        to: [notification.recipient],
-        subject: 'SUKHA inquiry ' + reference,
-        text: [reference, inquiry.name, inquiry.email, inquiry.summary].join('\n\n'),
-      }),
-    });
-    if (!response.ok) return false;
-
-    await env.DB.prepare("UPDATE notifications SET status='sent' WHERE id=?")
-      .bind(notification.id).run();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
@@ -71,7 +41,9 @@ export async function onRequest({ request, env }) {
 
   const reference = 'INQ-' + requestId.toUpperCase();
   const notificationId = 'pages-' + reference;
-  const payload = JSON.stringify({ type: 'rail', summary, consent: true });
+  const type=body.type===undefined?'rail':body.type;
+  if(!['private','rail','cruise'].includes(type))return respond({error:'Invalid journey type.'},400);
+  const payload = JSON.stringify({ type, summary, consent: true });
   const time = Date.now();
   const db = env.DB;
   const lookup = db.prepare('SELECT name,email,payload FROM inquiries WHERE id=?').bind(reference);

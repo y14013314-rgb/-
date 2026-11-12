@@ -64,6 +64,10 @@
     form.elements.email.readOnly = true;
     status.textContent = 'Submitting your inquiry…';
     try {
+      const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(serialized)))).map(b=>b.toString(16).padStart(2,'0')).join('');
+      let cached;try{cached=JSON.parse(sessionStorage.getItem('sukha-product-inquiry-id'));}catch{}
+      if(cached?.fingerprint===fingerprint)requestId=cached.requestId;
+      try{sessionStorage.setItem('sukha-product-inquiry-id',JSON.stringify({fingerprint,requestId}));}catch{}
       const response = await fetch('/api/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
