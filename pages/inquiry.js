@@ -75,6 +75,7 @@
       });
       const result = await response.json();
       if (!response.ok || !result.saved) throw new Error(result.error);
+      try{globalThis.SukhaAnalytics?.lead(result);}catch{}
       lastResult = result;
       showResult(result);
     } catch {

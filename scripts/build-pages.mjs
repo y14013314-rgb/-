@@ -1,3 +1,4 @@
+import {withAnalytics} from '../lib/content/analytics.mjs';
 import { buildCatalog } from './catalog.mjs';
 import { renderTrain } from '../lib/content/render-train.mjs';
 import { cpSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -50,7 +51,8 @@ cpSync(join(root, 'pages/inquiry.js'), join(output, 'pages-inquiry.js'));
 cpSync(join(root, 'team/public'), join(output, 'team'), { recursive: true });
 for (const file of readdirSync(output, { recursive: true }).filter(file => file.endsWith('.html'))) {
   const path = join(output, file);
-  writeFileSync(path, readFileSync(path, 'utf8').replaceAll(oldOrigin, origin));
+  const html=readFileSync(path, 'utf8').replaceAll(oldOrigin, origin);
+  writeFileSync(path, /^(team|admin|quote)\//.test(file)?html:withAnalytics(html));
 }
 const sitemap = readFileSync(join(source, 'sitemap.xml'), 'utf8');
 writeFileSync(join(output, 'sitemap.xml'), sitemap.replaceAll(oldOrigin, origin)

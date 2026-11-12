@@ -52,6 +52,7 @@
   submitStatus.textContent='Submitting your inquiry…';
    const r=await fetch('/api/inquiries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...details,requestId})}),v=await r.json();
    if(!r.ok||v.saved!==true||!v.reference)throw new Error();
+   try{globalThis.SukhaAnalytics?.lead(v);}catch{}
    lastResult=v;document.querySelector('#home-review-heading').textContent='Your inquiry has been saved.';
    review.querySelector('p').textContent='Your request is saved with SUKHA. You can also contact us using the options below.';
    submitStatus.textContent='Inquiry '+v.reference+(v.emailSent?'. The team’s email notification was accepted for delivery.':'. Your inquiry is saved; the team’s email notification is pending.');
