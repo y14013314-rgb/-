@@ -120,7 +120,7 @@ test('create, publish, feature, unpublish and relaunch a new private journey',as
  item.product.featured=true;item.product.sections=[{title:'Day 20',description:'Additional touring day <safe>'}];assert.equal((await call('save',{product:item.product,revision:1})).status,200);
  assert.equal((await call('publish',{slug,revision:2})).status,200);
  const live=await page();assert.equal(live.status,200);const html=await live.text();assert(html.includes('Family Journey'));assert(html.includes('Additional touring day &lt;safe&gt;'));assert(html.includes('https://sukhatrip.com/journeys/'+slug+'/'));
- const collection=path=>catalogCollection({env,request:new Request('https://sukhatrip.com'+path),next:async()=>new Response('<main></main>',{headers:{'Content-Type':'text/html'}})});
+ const collection=path=>catalogCollection({env,request:new Request('https://sukhatrip.com'+path),next:async()=>new Response('<main><section id="itineraries"><div id="journey-results"></div></section></main>',{headers:{'Content-Type':'text/html'}})});
  assert((await (await collection('/private-china-tours/')).text()).includes('/journeys/'+slug+'/'));
  assert((await (await collection('/')).text()).includes('/journeys/'+slug+'/'));
  const sitemap=()=>sitemapRequest({env,request:new Request('https://sukhatrip.com/sitemap.xml'),next:async()=>new Response('<urlset></urlset>')});
@@ -164,4 +164,37 @@ test('delete removes only unpublished or withdrawn custom records and rejects st
  const list=await (await call('products')).json();assert(!list.products.some(p=>p.slug===slug));
  assert.equal((await call('create',{slug:'draft-delete',title:'Draft',baseSlug:'baiyun'})).status,201);
  assert.equal((await call('delete',{slug:'draft-delete',revision:1})).status,200);
+});
+
+test('publication placement moves cards between real sections without changing detail URLs',async()=>{
+ const {call,env}=await setup(),slug='choose-location';
+ await call('create',{slug,title:'Placement <safe>',baseSlug:'classic-china'});
+ let item=await (await call('product?slug='+slug)).json();
+ assert.equal(item.product.placement,'itineraries');assert.equal(item.placements.length,4);
+ const source=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ const collection=async()=>await (await catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'),next:async()=>new Response(source)})).text();
+ for(const location of ['destinations','itineraries','experiences','more']){
+  item.product.placement=location;
+  const before=await collection();
+  const saved=await (await call('save',{product:item.product,revision:item.revision})).json();
+  assert.equal(await collection(),before,'saving a draft must not move the live card');
+  const published=await (await call('publish',{slug,revision:saved.revision})).json();item.revision=published.revision;
+  const html=await collection(),path='/journeys/'+slug+'/';
+  if(location==='more')assert(html.slice(html.indexOf('More journeys to discover.')).includes(path));
+  else{const start=html.indexOf('id="'+location+'"'),end=html.indexOf('</section>',start);assert(html.slice(start,end).includes(path));assert(!html.slice(end).includes(path));}
+  assert(html.includes('Placement &lt;safe&gt;'));assert.equal((await (await call('product?slug='+slug)).json()).url,path);
+ }
+ item.product.placement='collection';assert.equal((await call('save',{product:item.product,revision:item.revision})).status,400);
+ item.product.placement='destinations';const saved=await (await call('save',{product:item.product,revision:item.revision})).json();await call('publish',{slug,revision:saved.revision});item=await (await call('product?slug='+slug)).json();await call('unpublish',{slug,revision:item.revision});assert(!(await collection()).includes('/journeys/'+slug+'/'));
+});
+
+test('existing placements stay unchanged and rail products can choose the main collection',async()=>{
+ const {call,env}=await setup();
+ const existing=await (await call('product?slug=classic-china')).json();assert.equal(existing.product.placement,'original');
+ const source=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ existing.product.placement='destinations';let saved=await (await call('save',{product:existing.product,revision:existing.revision})).json();await call('publish',{slug:'classic-china',revision:saved.revision});
+ const html=await (await catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'),next:async()=>new Response(source)})).text();
+ const start=html.indexOf('id="destinations"'),end=html.indexOf('</section>',start);assert(html.slice(start,end).includes('/journeys/classic-china/'));assert(!html.slice(end).includes('/journeys/classic-china/'));
+ await call('create',{slug:'rail-location',title:'Rail placement',baseSlug:'baiyun'});const rail=await (await call('product?slug=rail-location')).json();assert.equal(rail.product.placement,'collection');assert.deepEqual(rail.placements.map(x=>x.value),['collection','more']);saved=await (await call('save',{product:rail.product,revision:rail.revision})).json();await call('publish',{slug:rail.product.slug,revision:saved.revision});
+ const railHtml=await (await catalogCollection({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'),next:async()=>new Response(readFileSync(new URL('../public/silk-road-luxury-trains/index.html',import.meta.url),'utf8'))})).text();const a=railHtml.indexOf('id="train-collection"'),b=railHtml.indexOf('</section>',a);assert(railHtml.slice(a,b).includes('/silk-road-luxury-trains/rail-location/'));assert(!railHtml.includes('More journeys to discover.'));
 });

@@ -14,7 +14,8 @@ test('expired save reveals login and reauthentication preserves unsaved text',as
  context.ui.draw();assert.match(get('editor-tabs').innerHTML,/基本信息/);assert.match(get('fields').innerHTML,/Unsaved name/);assert.match(context.ui.fields({src:'/assets/photo.webp'},['image']),/<img/);assert.match(context.ui.fields({src:'/assets/photo.webp'},['image']),/选择或更换图片/);
  const draft=context.ui.getDraft();await context.ui.showUser({email:'owner@example.test',role:'editor'});
  assert.equal(context.ui.getDraft(),draft);assert.equal(draft.title,'Unsaved name');
- context.fetch=async()=>({ok:true,json:async()=>({product:{slug:'new-journey',title:'New journey',values:{field0:'Text'},sections:[]},fields:[{key:'field0',label:'Introduction',type:'text'}],url:'/journeys/new-journey/',revision:1,canPublish:true,canUnpublish:true})});
+ context.fetch=async()=>({ok:true,json:async()=>({product:{slug:'new-journey',title:'New journey',values:{field0:'Text'},sections:[]},placements:[{value:'itineraries',label:'推荐行程'},{value:'destinations',label:'目的地探索'}],fields:[{key:'field0',label:'Introduction',type:'text'}],url:'/journeys/new-journey/',revision:1,canPublish:true,canUnpublish:true})});
  await context.ui.loadProduct('new-journey');assert.equal(get('product-select').value,'new-journey');assert.equal(get('live-link').href,'/journeys/new-journey/');
+ assert.match(context.ui.fields({placement:'destinations'}),/目的地探索/);assert.match(context.ui.fields({placement:'destinations'}),/value="destinations" selected/);
  assert.equal(get('send').hidden,true);assert.match(get('message').textContent,/未保存的修改已保留/);
 });
