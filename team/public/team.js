@@ -21,6 +21,7 @@ async function saveDraft(){
   if(JSON.stringify(saved.product)!==JSON.stringify(product))throw error;
   revision=saved.revision;
  }
+ const link=$('preview-position');if(link.href){const position=product.placement,anchor=['original','collection'].includes(position)?(link.href.includes('/private-china-tours/')?'itineraries':link.href.includes('/silk-road-luxury-trains/')?'train-collection':''):position==='more'?'more-journeys':position;link.href=link.href.split('#')[0]+'#'+(anchor||'');}
  dirty=false;$('message').textContent='草稿已保存。请预览，确认后再发布。';
 }
 async function showUser(user){
