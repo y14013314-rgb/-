@@ -10,6 +10,7 @@ body.home-v1 .home-button:hover{background:#e5bd8c}
 body.home-v1 .home-text-link{display:inline-flex;gap:28px;font:500 12px/1.6 Arial,sans-serif;border:0;border-bottom:1px solid #a8b3a6;padding:10px 0;background:transparent;color:inherit;cursor:pointer}
 body.home-v1 :is(a,button,input,select,textarea):focus-visible{outline:3px solid #b78140;outline-offset:5px}
 body.home-v1 .home-header{height:102px;position:sticky;top:0;background:#f7f5f0fa;backdrop-filter:blur(12px);padding:0 4%;gap:22px;z-index:20;border-bottom:1px solid #dedfd6}
+body.home-v1 .home-header .logo-crop img{mix-blend-mode:multiply}
 body.home-v1 .home-header .brand{min-width:128px}body.home-v1 .home-header nav{gap:22px}body.home-v1 .home-header nav a{font-size:11px;color:#263d37}
 body.home-v1 .home-header .home-header-cta{font-size:11px;padding:12px 17px;min-height:44px;gap:18px}
 body.home-v1 .home-hero{position:relative;min-height:660px;height:calc(100svh - 102px);max-height:940px;background:#1b302c;color:#fff;overflow:hidden}
