@@ -1,6 +1,23 @@
 const $=id=>document.getElementById(id);let challenge;
-async function api(action,body){const r=await fetch('/api/team/'+action,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok)throw new Error(v.error||'操作失败，请稍后再试。');return v;}
-async function showUser(user){$('send').hidden=true;$('verify').hidden=true;$('workspace').hidden=false;$('identity').textContent=user.email;$('message').textContent='';document.querySelector('main').classList.add('editing');await loadProduct();if(user.role==='admin'){$('members').hidden=false;await loadMembers();}}
+function requireLogin(){
+ $('send').hidden=false;$('verify').hidden=true;$('code').value='';challenge=null;
+ $('session-title').textContent='登录状态已失效';
+ $('email').value=$('identity').textContent;
+ $('send').scrollIntoView({block:'center',behavior:'smooth'});
+}
+async function api(action,body){const r=await fetch('/api/team/'+action,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const v=await r.json();if(!r.ok){
+ if(r.status===401&&!['me','verify','request-code'].includes(action)){
+  requireLogin();throw new Error('登录状态已失效，请在上方重新获取验证码。当前未保存的修改仍保留在本页面，重新登录后可继续保存，请勿刷新。');
+ }
+ throw new Error(v.error||'操作失败，请稍后再试。');
+}return v;}
+async function showUser(user){
+ $('send').hidden=true;$('verify').hidden=true;$('workspace').hidden=false;$('identity').textContent=user.email;
+ $('session-title').textContent='登录成功';document.querySelector('main').classList.add('editing');
+ if(product&&dirty){$('message').textContent='已重新登录，未保存的修改已保留。请点击保存草稿。';}
+ else{$('message').textContent='';await loadProduct();}
+ if(user.role==='admin'){$('members').hidden=false;await loadMembers();}else{$('members').hidden=true;$('publish').disabled=true;}
+}
 async function action(form,fn){const buttons=[...form.querySelectorAll('button')],disabled=buttons.map(b=>b.disabled);buttons.forEach(b=>b.disabled=true);$('message').textContent='正在处理…';try{await fn();}catch(e){$('message').textContent=e.message;}finally{buttons.forEach((b,i)=>b.disabled=disabled[i]);}}
 $('send').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{const v=await api('request-code',{email:$('email').value});challenge=v.challenge;$('send').hidden=true;$('verify').hidden=false;$('message').textContent='验证码邮件已提交发送，请检查收件箱和垃圾邮件。10 分钟内有效。';$('code').focus();});};
 $('verify').onsubmit=e=>{e.preventDefault();action(e.target,async()=>showUser(await api('verify',{challenge,code:$('code').value})));};
