@@ -56,7 +56,7 @@ test('preview environment cannot publish and save requires a current revision',a
  assert.deepEqual([a.status,b.status].sort(),[200,409]);
 });
 
-test('member grants, least privilege and immediate revocation',async()=>{
+test('member grants, self-publication and immediate revocation',async()=>{
  const {env,call,sql}=await setup();
  assert.equal((await call('members',null,{anonymous:true})).status,401);
  assert.equal((await call('members',{email:'staff@example.test',active:true})).status,200);
@@ -66,8 +66,10 @@ test('member grants, least privilege and immediate revocation',async()=>{
  const token=crypto.randomUUID()+crypto.randomUUID();sql.prepare('INSERT INTO login_sessions VALUES (?,?,?)').run(await digest(token),'staff@example.test',Date.now()+60000);
  const invoke=(handler,action,body)=>handler({env,params:{action},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:'https://sukhatrip.com','Content-Type':'application/json',Cookie:'__Host-sukha-team='+token},...(body?{body:JSON.stringify(body)}:{})})});
  assert.equal((await invoke(onMembers,'members')).status,403);
- assert.equal((await invoke(onContent,'publish',{revision:0})).status,403);
+ assert.equal((await (await invoke(onContent,'product')).json()).canPublish,true);
+ assert.equal((await invoke(onContent,'publish',{revision:0})).status,409);
  assert.equal((await invoke(onContent,'save',{revision:0,product:seed})).status,200);
+ assert.equal((await invoke(onContent,'publish',{revision:1})).status,200);
  assert.equal((await call('members',{email:'staff@example.test',active:false})).status,200);
  assert.equal(await member('staff@example.test',env),null);
  assert.equal((await invoke(onContent,'product')).status,401);

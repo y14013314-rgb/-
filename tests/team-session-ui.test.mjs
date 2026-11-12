@@ -5,12 +5,13 @@ import vm from 'node:vm';
 test('expired save reveals login and reauthentication preserves unsaved text',async()=>{
  const elements=new Map();
  const get=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',value:'',disabled:false,querySelectorAll:()=>[],scrollIntoView(){this.scrolled=true;}});return elements.get(id);};
- const context=vm.createContext({document:{getElementById:get,querySelector:()=>({classList:{add(){}}})},window:{addEventListener(){}},fetch:async()=>({ok:false,status:401,json:async()=>({error:'请先登录。'})}),confirm:()=>true});
- vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+'\n globalThis.ui={api,showUser,setDraft(){product={title:"Unsaved name"};dirty=true;},getDraft(){return product;}};',context);
+ const context=vm.createContext({document:{getElementById:get,querySelectorAll:()=>[],querySelector:()=>({classList:{add(){}}})},window:{addEventListener(){}},fetch:async()=>({ok:false,status:401,json:async()=>({error:'请先登录。'})}),confirm:()=>true});
+ vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+'\n globalThis.ui={api,showUser,draw,fields,setDraft(){product={title:"Unsaved name"};dirty=true;},getDraft(){return product;}};',context);
  context.ui.setDraft();get('identity').textContent='owner@example.test';
  await assert.rejects(context.ui.api('save',{product:{title:'Unsaved name'},revision:2}),/未保存的修改仍保留/);
  assert.equal(get('send').hidden,false);assert.equal(get('session-title').textContent,'登录状态已失效');
  assert.equal(get('email').value,'owner@example.test');assert.equal(get('send').scrolled,true);
+ context.ui.draw();assert.match(get('editor-tabs').innerHTML,/基本信息/);assert.match(get('fields').innerHTML,/Unsaved name/);assert.match(context.ui.fields({src:'/assets/photo.webp'},['image']),/<img/);assert.match(context.ui.fields({src:'/assets/photo.webp'},['image']),/选择或更换图片/);
  const draft=context.ui.getDraft();await context.ui.showUser({email:'owner@example.test',role:'editor'});
  assert.equal(context.ui.getDraft(),draft);assert.equal(draft.title,'Unsaved name');
  assert.equal(get('send').hidden,true);assert.match(get('message').textContent,/未保存的修改已保留/);
