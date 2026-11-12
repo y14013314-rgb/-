@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
+import {upload,image,maxImageBytes} from '../lib/content/media.mjs';
 import {onMembers} from '../lib/content/members.mjs';
 import {member} from '../lib/content/auth.mjs';
 import {onContent} from '../lib/content/content-api.mjs';
@@ -18,7 +19,7 @@ async function setup(){
  const env={TEAM_DB:db,TEAM_ADMIN_EMAIL:'owner@example.test',TEAM_PUBLISH:'1',SITE_URL:'https://sukhatrip.com'};
  const call=(action,body,options={})=>(action==='members'?onMembers:onContent)({env,params:{action},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:options.origin||'https://sukhatrip.com','Content-Type':'application/json',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})},...(body?{body:JSON.stringify(body)}:{})})});
  const page=collection=>published({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/baiyun/'),next:async()=>new Response(collection?'<article class="cruise-collection-card" id="baiyun">original card</article>':'original page')},collection);
- return {env,call,page,sql};
+ return {env,call,page,sql,token};
 }
 test('draft privacy, saved preview, publication and revision conflicts',async()=>{
  const {call,page}=await setup();
@@ -70,4 +71,17 @@ test('member grants, least privilege and immediate revocation',async()=>{
  assert.equal((await invoke(onContent,'product')).status,401);
  assert.equal((await call('members',{email:'staff@example.test',active:true})).status,200);
  assert.equal((await invoke(onContent,'product')).status,401);
+});
+
+test('image upload permission, byte limits and public image response',async()=>{
+ const {env,token}=await setup();const bytes=readFileSync(new URL('../public/assets/trains/baiyun-salon.webp',import.meta.url));
+ const send=(body,options={})=>upload({env,request:new Request('https://sukhatrip.com/api/team/upload',{method:'POST',headers:{Origin:options.origin||'https://sukhatrip.com','Content-Type':'image/webp',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})},body})});
+ assert.equal((await send(bytes,{anonymous:true})).status,401);
+ assert.equal((await send(bytes,{origin:'https://evil.test'})).status,403);
+ assert.equal((await send(new Uint8Array(maxImageBytes+1))).status,413);
+ assert.equal((await send(new TextEncoder().encode('<script>alert(1)</script>'))).status,400);
+ const r=await send(bytes);assert.equal(r.status,200);const {url}=await r.json();
+ const served=await image({env,params:{id:url.split('/').pop()},request:new Request('https://sukhatrip.com'+url)});
+ assert.equal(served.headers.get('Content-Type'),'image/webp');assert.deepEqual(new Uint8Array(await served.arrayBuffer()),new Uint8Array(bytes));
+ const p=structuredClone(seed);p.image.src=url;validateProduct(p);
 });

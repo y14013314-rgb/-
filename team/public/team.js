@@ -18,7 +18,7 @@ function fields(value,path=[]){return Object.entries(value).filter(([k])=>k!=='s
  }
  if(v&&typeof v==='object')return `<fieldset><legend>${esc(label)}</legend>${fields(v,p)}</fieldset>`;
  if(k==='status'&&path[0]==='price')return `<label>${esc(label)}<select data-path="${key}"><option value="on-request" ${v==='on-request'?'selected':''}>询价 · Price on request</option><option value="from" ${v==='from'?'selected':''}>每人起价 · From</option></select></label>`;
- return `<label>${esc(label)}${typeof v==='number'?`<input type="number" step="any" data-path="${key}" data-type="number" value="${esc(v)}">`:`<textarea data-path="${key}" rows="${['description','planningNote','accessNote'].includes(k)?4:2}">${esc(v)}</textarea>`}</label>`;
+ return `<label>${esc(label)}${typeof v==='number'?`<input type="number" step="any" data-path="${key}" data-type="number" value="${esc(v)}">`:`<textarea data-path="${key}" rows="${['description','planningNote','accessNote'].includes(k)?4:2}">${esc(v)}</textarea>`}</label>${(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')?`<label>从电脑上传图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label>`:''}`;
  }).join('');}
 function at(path){return path.reduce((x,k)=>x[k],product);}
 function draw(){
@@ -26,6 +26,7 @@ function draw(){
  if(product.price.amount===undefined)product.price.amount=0;
  $('fields').innerHTML=fields(product);
  $('fields').querySelectorAll('[data-path]').forEach(input=>input.oninput=()=>{const p=JSON.parse(input.dataset.path),key=p.pop();at(p)[key]=input.dataset.type==='number'?Number(input.value):input.dataset.type==='lines'?input.value.split('\n').filter(s=>s.trim()):input.value;dirty=true;});
+ $('fields').querySelectorAll('[data-upload]').forEach(input=>input.onchange=()=>uploadImage(input));
  $('fields').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{if(!confirm('删除这条内容？保存并发布后才影响官网。'))return;const p=JSON.parse(b.dataset.remove),i=p.pop();at(p).splice(i,1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const a=at(JSON.parse(b.dataset.add));a.push({title:'',description:''});dirty=true;draw();});
 }
@@ -38,3 +39,17 @@ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.return
 async function loadMembers(){const v=await api('members');$('member-list').innerHTML=v.members.map(m=>`<p>${esc(m.email)} · ${m.active?'已授权':'已停用'} <button type="button" data-member="${esc(m.email)}" data-active="${m.active?'0':'1'}">${m.active?'停用':'恢复'}</button></p>`).join('')||'<p>尚未添加同事。</p>';$('member-list').querySelectorAll('[data-member]').forEach(b=>b.onclick=()=>{if(!confirm(b.dataset.active==='0'?'停用后该同事将无法继续访问后台，确定？':'恢复该同事的编辑权限？'))return;action($('members'),async()=>{await api('members',{email:b.dataset.member,active:b.dataset.active==='1'});await loadMembers();$('message').textContent='成员权限已更新。';});});}
 $('member-form').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{await api('members',{email:$('member-email').value,active:true});$('member-email').value='';await loadMembers();$('message').textContent='已授权。同事可使用自己的邮箱验证码登录；仅可编辑草稿，不能发布。';});};
 api('me').then(showUser).catch(()=>{});
+
+async function uploadImage(input){
+ const file=input.files[0];if(!file)return;
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>20*1024*1024){$('message').textContent='请选择 20 MB 以内的 JPG、PNG 或 WebP 图片。';input.value='';return;}
+ input.disabled=true;$('message').textContent='正在压缩并上传图片…';
+ try{
+  const bitmap=await createImageBitmap(file);const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+  let blob;for(const quality of [.85,.7,.5]){blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));if(blob&&blob.size<=512*1024)break;}
+  if(!blob||blob.type!=='image/webp'||blob.size>512*1024)throw new Error('图片压缩失败，请选择较小的图片或填写图片地址。');
+  const r=await fetch('/api/team/upload',{method:'POST',headers:{'Content-Type':'image/webp'},body:blob});const v=await r.json();if(!r.ok)throw new Error(v.error||'上传失败');
+  const p=JSON.parse(input.dataset.upload),key=p.pop();at(p)[key]=v.url;dirty=true;draw();$('message').textContent='图片已上传。请保存草稿并预览，发布后才会更换官网图片。';
+ }catch(e){$('message').textContent=e.message;}finally{input.disabled=false;input.value='';}
+}
