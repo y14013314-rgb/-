@@ -38,9 +38,9 @@ $('back').onclick=()=>{challenge=null;$('code').value='';$('verify').hidden=true
 $('logout').onclick=()=>action($('workspace'),async()=>{await api('logout',{});location.reload();});
 
 let product,revision,dirty=false,selectedSlug='baiyun',fieldSpecs=[],activeTab='basic',existingVideos=[],placementChoices=[];
-const labels={sections:'补充行程与内容',featured:'在首页推荐',values:'页面内容（按页面顺序）',title:'英文名称 / 标题',localTitle:'中文名称',description:'英文介绍',year:'年份',days:'天数',route:'路线（每行一个地点）',image:'主图',src:'素材路径或 HTTPS 地址',alt:'图片说明',credit:'素材来源说明',film:'视频',poster:'视频封面图片',price:'价格',status:'展示方式',currency:'币种',amount:'金额',highlights:'产品亮点',editions:'路线版本',supplement:'附加费用',option:'费用选项说明',unit:'计价单位',source:'费用来源',itinerary:'行程',planningNote:'预订说明',accessNote:'出行限制说明',sources:'参考资料（每行一条）'};
+const labels={sections:'补充行程与内容',values:'页面内容（按页面顺序）',title:'英文名称 / 标题',localTitle:'中文名称',description:'英文介绍',year:'年份',days:'天数',route:'路线（每行一个地点）',image:'主图',src:'素材路径或 HTTPS 地址',alt:'图片说明',credit:'素材来源说明',film:'视频',poster:'视频封面图片',price:'价格',status:'展示方式',currency:'币种',amount:'金额',highlights:'产品亮点',editions:'路线版本',supplement:'附加费用',option:'费用选项说明',unit:'计价单位',source:'费用来源',itinerary:'行程',planningNote:'预订说明',accessNote:'出行限制说明',sources:'参考资料（每行一条）'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slug','templateSlug'].includes(k)).map(([k,v])=>{
+function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slug','templateSlug','featured'].includes(k)).map(([k,v])=>{
  const p=[...path,k],key=esc(JSON.stringify(p)),label=fieldSpecs.find(f=>f.key===k)?.label||labels[k]||k;
  if(k==='placement')return `<label>发布位置<select data-path="${key}">${placementChoices.map(o=>`<option value="${esc(o.value)}" ${v===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select><small>保存草稿并发布后，会移到所选栏目。产品详情网址保持不变。</small></label>`;
  if(typeof v==='boolean')return `<label class="check-label"><input type="checkbox" data-path="${key}" data-type="boolean" ${v?'checked':''}> ${esc(label)}</label>`;
@@ -61,11 +61,11 @@ function draw(){
  if(product.price&&product.price.amount===undefined)product.price.amount=0;
  const groups={basic:[],media:[],content:[],price:[]};
  if(product.values){
-  groups.basic.push(fields(product.slug==='homepage'?{title:product.title}:{title:product.title,placement:product.placement,featured:product.featured||false}));
+  groups.basic.push(fields(product.slug==='homepage'?{title:product.title}:{title:product.title,placement:product.placement}));
   const media={},text={};for(const [key,value]of Object.entries(product.values))(fieldSpecs.find(f=>f.key===key)?.type==='image'?media:text)[key]=value;
   groups.media.push(fields(media,['values']));groups.media.push(existingVideos.map(url=>`<article class="media-card"><video controls preload="none" src="${esc(url)}"></video><div class="media-copy"><strong>现有产品视频</strong><p>可播放预览，视频文件上传稍后接入。</p></div></article>`).join(''));groups.content.push(fields(text,['values']));groups.content.push(fields({sections:product.sections||[]}));
  }else{
-  for(const [key,value]of Object.entries(product)){if(['slug','templateSlug'].includes(key))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','featured','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
+  for(const [key,value]of Object.entries(product)){if(['slug','templateSlug','featured'].includes(key))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
  }
  const names={basic:'基本信息',media:'图片与视频',content:'行程与文字',price:'价格'};
  const available=Object.keys(groups).filter(k=>groups[k].join('').length);if(!available.includes(activeTab))activeTab=available[0];
@@ -77,7 +77,7 @@ function draw(){
  $('fields').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{if(!confirm('删除这条内容？保存并发布后才影响官网。'))return;const p=JSON.parse(b.dataset.remove),i=p.pop();at(p).splice(i,1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const a=at(JSON.parse(b.dataset.add));a.push({title:'',description:''});dirty=true;draw();});
 }
-async function loadProduct(slug=selectedSlug){const v=await api('product?slug='+encodeURIComponent(slug));selectedSlug=slug;$('product-select').value=slug;product=v.product;placementChoices=v.placements||[];fieldSpecs=v.fields||[];existingVideos=v.videos||[];revision=v.revision;dirty=false;if(product.slug!=='homepage'&&product.featured===undefined)product.featured=false;draw();$('live-link').href=v.url;$('delete-product').hidden=!v.canDelete;$('delete-product').disabled=!v.canPublish||Boolean(v.publishedAt&&!v.hidden);$('unpublish').hidden=!v.canUnpublish;$('unpublish').disabled=!v.canPublish||v.hidden;$('preview').href='/api/team/preview?slug='+encodeURIComponent(selectedSlug);$('preview-position').hidden=!v.collectionPreviewUrl;$('preview-position').href=v.collectionPreviewUrl||'#';$('publish').disabled=!v.canPublish;document.querySelectorAll('[data-product]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.product===selectedSlug)));$('publication').textContent=v.hidden?'已下架；保存后重新发布即可上架。':v.publishedAt?'最近发布：'+new Date(v.publishedAt).toLocaleString('zh-CN'):'尚未通过后台发布，官网仍使用原内容。';}
+async function loadProduct(slug=selectedSlug){const v=await api('product?slug='+encodeURIComponent(slug));selectedSlug=slug;$('product-select').value=slug;product=v.product;placementChoices=v.placements||[];fieldSpecs=v.fields||[];existingVideos=v.videos||[];revision=v.revision;dirty=false;draw();$('live-link').href=v.url;$('delete-product').hidden=!v.canDelete;$('delete-product').disabled=!v.canPublish||Boolean(v.publishedAt&&!v.hidden);$('unpublish').hidden=!v.canUnpublish;$('unpublish').disabled=!v.canPublish||v.hidden;$('preview').href='/api/team/preview?slug='+encodeURIComponent(selectedSlug);$('preview-position').hidden=!v.collectionPreviewUrl;$('preview-position').href=v.collectionPreviewUrl||'#';$('publish').disabled=!v.canPublish;document.querySelectorAll('[data-product]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.product===selectedSlug)));$('publication').textContent=v.hidden?'已下架；保存后重新发布即可上架。':v.publishedAt?'最近发布：'+new Date(v.publishedAt).toLocaleString('zh-CN'):'尚未通过后台发布，官网仍使用原内容。';}
 $('editor').onsubmit=e=>{e.preventDefault();action(e.target,saveDraft);};
 $('preview').onclick=e=>{if(dirty){e.preventDefault();$('message').textContent='请先保存草稿，再打开预览。';}};
 $('preview-position').onclick=$('preview').onclick;
