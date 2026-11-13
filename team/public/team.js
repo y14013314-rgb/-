@@ -21,7 +21,7 @@ async function saveDraft(){
   if(JSON.stringify(saved.product)!==JSON.stringify(product))throw error;
   revision=saved.revision;
  }
- const link=$('preview-position');if(link.href){const position=product.placement,anchor=['original','collection'].includes(position)?(link.href.includes('/private-china-tours/')?'itineraries':link.href.includes('/silk-road-luxury-trains/')?'train-collection':''):position==='more'?'more-journeys':position;link.href=link.href.split('#')[0]+'#'+(anchor||'');}
+ const link=$('preview-position');if(link.href&&product.placement!==undefined){const position=product.placement,anchor=['original','collection'].includes(position)?(link.href.includes('/private-china-tours/')?'itineraries':link.href.includes('/silk-road-luxury-trains/')?'train-collection':''):position==='more'?'more-journeys':position;link.href=link.href.split('#')[0]+'#'+(anchor||'');}
  dirty=false;$('message').textContent='草稿已保存。请预览，确认后再发布。';
 }
 async function showUser(user){
@@ -41,6 +41,7 @@ $('logout').onclick=()=>action($('workspace'),async()=>{await api('logout',{});l
 
 let product,revision,dirty=false,selectedSlug='baiyun',fieldSpecs=[],activeTab='basic',existingVideos=[],placementChoices=[];
 const labels={sections:'补充行程与内容',values:'页面内容（按页面顺序）',title:'英文名称 / 标题',localTitle:'中文名称',description:'英文介绍',year:'年份',days:'天数',route:'路线（每行一个地点）',image:'主图',src:'素材路径或 HTTPS 地址',alt:'图片说明',credit:'素材来源说明',film:'视频',poster:'视频封面图片',price:'价格',status:'展示方式',currency:'币种',amount:'金额',highlights:'产品亮点',editions:'路线版本',supplement:'附加费用',option:'费用选项说明',unit:'计价单位',source:'费用来源',itinerary:'行程',planningNote:'预订说明',accessNote:'出行限制说明',sources:'参考资料（每行一条）'};
+const categoryNames={home:'首页',journeys:'私人行程','silk-road-luxury-trains':'列车','yangtze-river-cruises':'游轮',destinations:'目的地','signature-experiences':'主题体验',experiences:'城市体验',wildlife:'野生动物'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slug','templateSlug','featured'].includes(k)).map(([k,v])=>{
  const p=[...path,k],key=esc(JSON.stringify(p)),label=fieldSpecs.find(f=>f.key===k)?.label||labels[k]||k;
@@ -63,7 +64,7 @@ function draw(){
  if(product.price&&product.price.amount===undefined)product.price.amount=0;
  const groups={basic:[],media:[],content:[],price:[]};
  if(product.values){
-  groups.basic.push(fields(product.slug==='homepage'?{title:product.title}:{title:product.title,placement:product.placement}));
+  groups.basic.push(fields(placementChoices.length?{title:product.title,placement:product.placement}:{title:product.title}));
   const media={},text={};for(const [key,value]of Object.entries(product.values))(fieldSpecs.find(f=>f.key===key)?.type==='image'?media:text)[key]=value;
   groups.media.push(fields(media,['values']));groups.media.push(fields({videoUrl:product.videoUrl??existingVideos[0]??''}));groups.content.push(fields(text,['values']));groups.content.push(fields({sections:product.sections||[]}));
  }else{
@@ -89,8 +90,8 @@ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.return
 
 async function loadMembers(){const v=await api('members');$('member-list').innerHTML=v.members.map(m=>`<p>${esc(m.email)} · ${m.active?'已授权':'已停用'} <button type="button" data-member="${esc(m.email)}" data-active="${m.active?'0':'1'}">${m.active?'停用':'恢复'}</button></p>`).join('')||'<p>尚未添加同事。</p>';$('member-list').querySelectorAll('[data-member]').forEach(b=>b.onclick=()=>{if(!confirm(b.dataset.active==='0'?'停用后该同事将无法继续访问后台，确定？':'恢复该同事的编辑权限？'))return;action($('members'),async()=>{await api('members',{email:b.dataset.member,active:b.dataset.active==='1'});await loadMembers();$('message').textContent='成员权限已更新。';});});}
 $('member-form').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{await api('members',{email:$('member-email').value,active:true});$('member-email').value='';await loadMembers();$('message').textContent='已授权。同事可使用自己的邮箱验证码登录；可以编辑、预览并自行发布。';});};
-async function loadProducts(){const v=await api('products');$('create-template').innerHTML=v.templates.map(t=>`<option value="${esc(t.slug)}">${esc({'journeys':'私人行程','silk-road-luxury-trains':'列车','yangtze-river-cruises':'游轮'}[t.category]||'产品')} · ${esc(t.label)}</option>`).join('');$('product-select').innerHTML=v.products.map(p=>`<option value="${esc(p.slug)}">${esc(p.label)}</option>`).join('');$('product-select').value=selectedSlug;
- $('product-cards').innerHTML=v.products.map(p=>`<button type="button" class="product-card" data-product="${esc(p.slug)}" aria-pressed="${p.slug===selectedSlug}"><img src="${esc(p.image||'')}" alt="" loading="lazy"><span><strong>${esc(p.label)}</strong><small>${p.hidden?'已下架':p.publishedAt?'已发布':p.isNew?'草稿 · 未上架':'现有官网页面'}</small></span></button>`).join('');
+async function loadProducts(){const v=await api('products');$('create-template').innerHTML=v.templates.map(t=>`<option value="${esc(t.slug)}">${esc({'journeys':'私人行程','silk-road-luxury-trains':'列车','yangtze-river-cruises':'游轮'}[t.category]||'产品')} · ${esc(t.label)}</option>`).join('');$('product-select').innerHTML=v.products.map(p=>`<option value="${esc(p.slug)}">${esc(categoryNames[p.category]||'产品')} · ${esc(p.localName?p.localName+' · ':'')}${esc(p.label)}</option>`).join('');$('product-select').value=selectedSlug;
+ $('product-cards').innerHTML=v.products.map(p=>`<button type="button" class="product-card" data-product="${esc(p.slug)}" aria-pressed="${p.slug===selectedSlug}"><img src="${esc(p.image||'')}" alt="" loading="lazy"><span><strong>${esc(p.localName?p.localName+' · ':'')}${esc(p.label)}</strong><small>${esc(categoryNames[p.category]||'产品')} · ${p.hidden?'已下架':p.publishedAt?'已发布':p.isNew?'草稿 · 未上架':'现有官网页面'}</small></span></button>`).join('');
  $('product-cards').querySelectorAll('[data-product]').forEach(b=>b.onclick=()=>{$('product-select').value=b.dataset.product;$('product-select').onchange();});$('product-search').oninput();}
 $('product-select').onchange=()=>{const value=$('product-select').value;if(dirty&&!confirm('当前修改未保存，确定切换并放弃修改？')){$('product-select').value=selectedSlug;return;}$('product-select').disabled=true;action($('workspace'),async()=>{try{await loadProduct(value);$('message').textContent='已载入产品。';}catch(e){$('product-select').value=selectedSlug;throw e;}finally{$('product-select').disabled=false;}});};
 $('unpublish').onclick=()=>{if(dirty){$('message').textContent='请先保存草稿，再下架。';return;}if(!confirm('下架后官网详情页和产品列表将不再展示此产品。内容会保留，可重新发布。确定下架？'))return;action($('editor'),async()=>{const v=await api('unpublish',{slug:selectedSlug,revision});revision=v.revision;$('publication').textContent='已下架；保存后重新发布即可上架。';await loadProducts();$('unpublish').disabled=true;$('delete-product').disabled=false;$('message').textContent='已下架，内容已保留。';});};

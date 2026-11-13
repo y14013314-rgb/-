@@ -48,3 +48,12 @@ test('lost save response is reconciled by reading the draft without repeating th
  await assert.rejects(context.ui.saveDraft(),/连接中断/);assert.equal(context.ui.state().dirty,true);assert.equal(context.ui.state().product.title,'测试');assert.equal(context.ui.state().revision,1);
  context.fetch=async()=>{throw new TypeError('Failed to fetch');};await assert.rejects(context.ui.saveDraft(),/请勿刷新/);assert.equal(context.ui.state().dirty,true);
 });
+
+test('destination editor keeps its fixed preview anchor and supports Chinese search and category labels',async()=>{
+ const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,{value:'',textContent:'',innerHTML:'',querySelectorAll:()=>[]});return elements.get(id);};
+ const context=vm.createContext({document:{getElementById:get,querySelectorAll:()=>[]},window:{addEventListener(){}},fetch:async()=>({ok:false,status:401,json:async()=>({})})});
+ vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+`\n globalThis.ui={loadProducts,loadProduct,saveDraft};`,context);
+ context.fetch=async url=>({ok:true,json:async()=>url.endsWith('/products')?{templates:[],products:[{slug:'destination-tibet',label:'Tibet',localName:'西藏',category:'destinations'}]}:url.endsWith('/save')?{revision:1}:{product:{slug:'destination-tibet',title:'Tibet',values:{}},placements:[],fields:[],url:'/destinations/tibet/',collectionPreviewUrl:'/private-china-tours/?team-preview=destination-tibet#tibet',revision:0,canPublish:true}});
+ await context.ui.loadProducts();assert.match(get('product-cards').innerHTML,/西藏/);assert.match(get('product-cards').innerHTML,/目的地/);assert.match(get('product-select').innerHTML,/西藏/);
+ await context.ui.loadProduct('destination-tibet');assert(!get('fields').innerHTML.includes('发布位置'));await context.ui.saveDraft();assert(get('preview-position').href.endsWith('#tibet'));
+});
