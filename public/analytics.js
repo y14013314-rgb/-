@@ -8,9 +8,12 @@
  const safeLocation=location.origin+location.pathname;
  let referrer='';try{referrer=new URL(document.referrer).origin+'/';}catch{}
  const debug=new URLSearchParams(location.search).get('analytics_debug')==='1';
+ const diagnostic=debug?document.createElement('div'):null;
+ function diagnose(message){if(diagnostic)diagnostic.textContent='Analytics test: '+message;}
  const emit=(name,parameters={})=>{if(allowed&&started)window.gtag('event',name,{send_to:id,page_location:safeLocation,page_referrer:referrer,page_title:'SUKHA Travel',...(debug?{debug_mode:true}:{}),...parameters});};
  function start(){
   allowed=true;window['ga-disable-'+id]=false;
+  diagnose('enabled; waiting for a successfully saved enquiry.');
   if(!started){
    started=true;window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments);};
    window.gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
@@ -29,8 +32,10 @@
  const settings=document.createElement('button');settings.type='button';settings.id='analytics-settings';settings.textContent='Cookie settings';settings.setAttribute('aria-controls','analytics-consent');
  settings.onclick=()=>{panel.hidden=false;panel.querySelector('button').focus();};
  document.body.append(panel,settings);
+ if(diagnostic){diagnostic.id='analytics-debug-status';diagnostic.setAttribute('role','status');diagnostic.style.cssText='position:fixed;bottom:58px;left:12px;right:12px;z-index:998;background:#f7f5f0;color:#263d37;padding:12px;border:1px solid #b78d5a;font:13px Arial';document.body.append(diagnostic);diagnose('not enabled; accept analytics to test.');}
  function reject(){
   const reload=started;allowed=false;window['ga-disable-'+id]=true;
+  diagnose('disabled; no analytics events will be sent.');
   if(reload){
    for(const part of document.cookie.split(';')){const name=part.trim().split('=')[0];if(!/^_ga(?:_|$)/.test(name))continue;
     for(const domain of ['',location.hostname,'.'+location.hostname,'.sukhatrip.com'])document.cookie=name+'=; Max-Age=0; Path=/'+(domain?'; Domain='+domain:'')+'; Secure; SameSite=Lax';
@@ -48,11 +53,12 @@
  window.SukhaAnalytics={lead(result){
   if(result?.saved!==true||!/^INQ-[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12}$/.test(result.reference))return;
   const stored=read('sessionStorage','sukha-analytics-leads');const saved=Array.isArray(stored)?stored:[];
-  if(seen.has(result.reference)||saved.includes(result.reference))return;
+  if(seen.has(result.reference)||saved.includes(result.reference)){diagnose('enquiry already handled; duplicate lead suppressed.');return;}
   seen.add(result.reference);
   // Remember handling locally so a notification retry cannot count an old lead.
   write('sessionStorage','sukha-analytics-leads',[...saved,result.reference].slice(-100));
   emit('generate_lead');
+  diagnose(allowed&&started?'generate_lead queued for Google; receipt must be checked in DebugView.':'enquiry saved without analytics consent; no lead event sent.');
  }};
  document.addEventListener('click',event=>{
   const a=event.target.closest('a');if(!a)return;let url;try{url=new URL(a.href,location.href);}catch{return;}
