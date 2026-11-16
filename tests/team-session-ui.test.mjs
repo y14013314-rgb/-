@@ -4,20 +4,24 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 test('video upload updates only the draft, blocks concurrent editing and preserves it on failure',async()=>{
  const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,{value:'',textContent:'',inert:false,querySelectorAll:()=>[]});return elements.get(id);};
- let succeed=true,sends=0;
+ let failure='',sends=0;
  const context=vm.createContext({document:{getElementById:get},window:{addEventListener(){}},FormData,
   fetch:async url=>url.endsWith('video-auth')?{ok:true,json:async()=>({token:'signed',parameters:{fileName:'video.mp4'}})}:{ok:false,status:401,json:async()=>({})},
   XMLHttpRequest:class{
-   constructor(){this.upload={};}open(method,url){assert.equal(url,'https://upload.imagekit.io/api/v2/files/upload');}
-   send(form){sends++;assert.equal(get('workspace').inert,true);assert.equal(form.get('token'),'signed');if(!succeed){this.onerror();return;}this.status=200;this.responseText=JSON.stringify({url:'https://ik.imagekit.io/negxem1l9/upload.mp4'});this.onload();}
+   constructor(){this.upload={};}open(method,url){assert.equal(url,'/api/team/video-upload');}
+   send(form){sends++;assert.equal(get('workspace').inert,true);assert.equal(form.get('token'),'signed');if(failure==='network'){this.onerror();return;}if(failure==='timeout'){this.ontimeout();return;}this.status=failure==='provider'?502:failure==='session'?401:failure==='size'?413:200;this.responseText=failure==='provider'?JSON.stringify({error:'官网与视频存储服务的连接中断'}):failure==='size'?'<h1>Too large</h1>':JSON.stringify({url:'https://ik.imagekit.io/negxem1l9/upload.mp4'});this.onload();}
   }
  });
  vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+`
  globalThis.ui={uploadVideo,setDraft(){product={slug:'classic-china',title:'Unsaved title',values:{},sections:[]};dirty=true;},state(){return {product,dirty};}};`,context);
  context.ui.setDraft();const file=new File(['video'],'clip.mp4',{type:'video/mp4'}),input={files:[file],dataset:{videoUpload:'["videoUrl"]'},value:'file'};
  await context.ui.uploadVideo(input);assert.equal(context.ui.state().product.videoUrl,'https://ik.imagekit.io/negxem1l9/upload.mp4');assert.equal(context.ui.state().dirty,true);assert.equal(get('workspace').inert,false);assert.match(get('message').textContent,/请保存草稿/);
- context.ui.setDraft();succeed=false;await context.ui.uploadVideo(input);assert.equal(context.ui.state().product.videoUrl,undefined);assert.equal(context.ui.state().product.title,'Unsaved title');assert.match(get('message').textContent,/结果未确认/);assert.equal(get('workspace').inert,false);
- input.files=[{name:'huge.mp4',type:'video/mp4',size:100000001}];await context.ui.uploadVideo(input);assert.equal(sends,2);assert.match(get('message').textContent,/100 MB/);
+ for(const [mode,message]of [['network',/电脑与官网.*结果未确认/],['timeout',/超过 10 分钟/],['provider',/官网与视频存储服务/],['size',/99 MB/]]){
+  context.ui.setDraft();failure=mode;await context.ui.uploadVideo(input);assert.equal(context.ui.state().product.videoUrl,undefined);assert.equal(context.ui.state().product.title,'Unsaved title');assert.match(get('message').textContent,message);assert.equal(get('workspace').inert,false);
+ }
+ let loginPrompted=false;context.promptLogin=()=>{loginPrompted=true;};vm.runInContext('requireLogin=promptLogin;',context);
+ failure='session';await context.ui.uploadVideo(input);assert(loginPrompted);assert.match(get('message').textContent,/重新登录/);
+ input.files=[{name:'huge.mp4',type:'video/mp4',size:99000001}];await context.ui.uploadVideo(input);assert.equal(sends,6);assert.match(get('message').textContent,/99 MB/);
 });
 test('expired save reveals login and reauthentication preserves unsaved text',async()=>{
  const elements=new Map();
