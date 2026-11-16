@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {upload,image,maxImageBytes} from '../lib/content/media.mjs';
-import {videoAuth,maxVideoBytes} from '../lib/content/video.mjs';
+import {videoAuth,maxVideoBytes,youtubeEmbedUrl} from '../lib/content/video.mjs';
 import {onMembers} from '../lib/content/members.mjs';
 import {member} from '../lib/content/auth.mjs';
 import {onContent} from '../lib/content/content-api.mjs';
@@ -61,6 +61,25 @@ test('catalog videos preserve templates until saved and published, including pag
   p.videoUrl='';validateCatalogProduct(p);assert(!renderCatalogProduct(p,env.SITE_URL).includes('<video'));
  }
  const p=structuredClone(seed);p.film.src=url;validateProduct(p);assert(renderTrain(p,template,env.SITE_URL).detail.includes(url));
+});
+test('YouTube links replace the existing snow leopard film after saving and publishing',async()=>{
+ const {call,env}=await setup(),slug='wildlife-sanjiangyuan-snow-leopard';
+ const p=structuredClone(catalog[slug].product),id='M7lc1UVf-VE',frame='https://www.youtube.com/embed/'+id;
+ for(const url of ['https://www.youtube.com/watch?v='+id,'https://youtu.be/'+id+'?si=share','https://www.youtube.com/shorts/'+id,frame])assert.equal(youtubeEmbedUrl(url),frame);
+ for(const url of ['https://youtube.com.evil.test/watch?v='+id,'javascript:alert(1)','https://youtube.com/watch?v=bad'])assert.equal(youtubeEmbedUrl(url),'');
+ p.videoUrl='https://www.youtube.com/watch?v='+id;
+ const original=renderCatalogProduct(catalog[slug].product,env.SITE_URL),old=original.match(/data-film-src="([^"]+)"/)[1];
+ assert.equal((await call('save',{product:p,revision:0})).status,200);
+ const preview=await (await call('preview?slug='+slug)).text();
+ assert(preview.includes('data-film-frame="'+frame+'"'));assert(!preview.includes('data-film-src='));assert(!preview.includes(old));assert(!preview.includes('<video'));
+ assert.equal((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published,null);
+ assert.equal((await call('publish',{slug,revision:1})).status,200);
+ const live=await onCatalogPage({env,request:new Request(env.SITE_URL+catalog[slug].path),next:async()=>new Response(original)},slug);
+ assert((await live.text()).includes('data-film-frame="'+frame+'"'));
+ p.videoUrl='https://example.test/new.mp4';const mp4=renderCatalogProduct(p,env.SITE_URL);assert(mp4.includes('data-film-src="'+p.videoUrl+'"'));assert(!mp4.includes(old));assert(!mp4.includes('<video'));
+ p.videoUrl='';assert(!renderCatalogProduct(p,env.SITE_URL).includes('data-film-title='));
+ const home=structuredClone(catalog.homepage.product);home.videoUrl='https://youtu.be/'+id;assert(renderCatalogProduct(home,env.SITE_URL).includes('<iframe title="Product video" src="'+frame+'"'));
+ const train=structuredClone(seed);train.film.src='https://youtu.be/'+id;assert(renderTrain(train,template,env.SITE_URL).detail.includes('<iframe title="Product video" src="'+frame+'"'));
 });
 test('draft privacy, saved preview, publication and revision conflicts',async()=>{
  const {call,page}=await setup();

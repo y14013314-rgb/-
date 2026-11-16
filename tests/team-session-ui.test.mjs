@@ -57,3 +57,13 @@ test('destination editor keeps its fixed preview anchor and supports Chinese sea
  await context.ui.loadProducts();assert.match(get('product-cards').innerHTML,/西藏/);assert.match(get('product-cards').innerHTML,/目的地/);assert.match(get('product-select').innerHTML,/西藏/);
  await context.ui.loadProduct('destination-tibet');assert(!get('fields').innerHTML.includes('发布位置'));await context.ui.saveDraft();assert(get('preview-position').href.endsWith('#tibet'));
 });
+
+test('video URL editing refreshes the preview without redrawing or losing the draft',()=>{
+ const elements=new Map(),preview={innerHTML:''};
+ const input={dataset:{path:'["videoUrl"]'},value:'https://www.youtube.com/watch?v=M7lc1UVf-VE',hasAttribute:name=>name==='data-video-link',closest:()=>({querySelector:()=>preview})};
+ const get=id=>{if(!elements.has(id))elements.set(id,{querySelectorAll:selector=>id==='fields'&&selector==='[data-path]'?[input]:[]});return elements.get(id);};
+ const context=vm.createContext({URL,document:{getElementById:get},window:{addEventListener(){}},fetch:async()=>({ok:false,status:401,json:async()=>({})})});
+ vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+'\nproduct={title:"Keep my edits",videoUrl:"https://example.test/old.mp4"};draw();globalThis.state=()=>({product,dirty});',context);
+ input.onchange();assert.match(preview.innerHTML,/src="https:\/\/www.youtube.com\/embed\/M7lc1UVf-VE"/);assert(!preview.innerHTML.includes('<video'));assert.equal(context.state().product.videoUrl,input.value);assert.equal(context.state().product.title,'Keep my edits');assert.equal(context.state().dirty,true);
+ input.value='https://example.test/new.mp4';input.onchange();assert.match(preview.innerHTML,/<video[^>]*src="https:\/\/example.test\/new.mp4"/);
+});
