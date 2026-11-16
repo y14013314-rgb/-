@@ -81,6 +81,40 @@ test('YouTube links replace the existing snow leopard film after saving and publ
  const home=structuredClone(catalog.homepage.product);home.videoUrl='https://youtu.be/'+id;assert(renderCatalogProduct(home,env.SITE_URL).includes('<iframe title="Product video" src="'+frame+'"'));
  const train=structuredClone(seed);train.film.src='https://youtu.be/'+id;assert(renderTrain(train,template,env.SITE_URL).detail.includes('<iframe title="Product video" src="'+frame+'"'));
 });
+test('destination additions continue the existing day list in preview and only go live after publication',async()=>{
+ const {call,env}=await setup();
+ const additions=[
+  {title:'DAY 06 — Tashilhunpo & a return to Lhasa',description:'Visit the monastery.\nReturn to Lhasa.'},
+  {title:'DAY 07 — Namtso & the northern plateau',description:'Explore the lake.'},
+  {title:'Onward <travel>',description:'Keep <script>literal</script> & flexible.'},
+ ];
+ for(const entry of Object.values(catalog).filter(e=>e.category==='destinations')){
+  const p=structuredClone(entry.product),before=renderCatalogProduct(p,env.SITE_URL);
+  p.sections=[];assert.equal(renderCatalogProduct(p,env.SITE_URL),before);
+  p.sections=structuredClone(additions);const html=renderCatalogProduct(p,env.SITE_URL),days=html.match(/<ol class="destination-days">([\s\S]*?)<\/ol>/)[1];
+  assert(days.includes('<span>DAY 06</span><div><h3>Tashilhunpo &amp; a return to Lhasa</h3><p>Visit the monastery.<br>Return to Lhasa.</p>'));
+  assert(days.includes('<span>DAY 07</span><div><h3>Namtso &amp; the northern plateau</h3>'));
+  assert(days.includes('<span>DAY 08</span><div><h3>Onward &lt;travel&gt;</h3>'));
+  assert(!html.includes('class="article-section"'));assert(!html.includes('<script>literal</script>'));
+  assert.equal(html.split('Tashilhunpo &amp; a return to Lhasa').length,2);
+  assert(html.indexOf('Namtso &amp; the northern plateau')<html.indexOf('destination-next'));
+  if(p.slug==='destination-tibet'){
+   assert.equal((await call('save',{product:p,revision:0})).status,200);
+   const page=()=>onCatalogPage({env,request:new Request(env.SITE_URL+entry.path),next:async()=>new Response(before)},p.slug);
+   assert.equal(await (await page()).text(),before);
+   assert.equal(await (await call('preview?slug='+p.slug)).text(),html);
+   assert.equal((await call('publish',{slug:p.slug,revision:1})).status,200);
+   assert.equal(await (await page()).text(),html);
+  }
+  const numbered=p.sections.map(s=>s.title);assert.deepEqual(numbered,additions.map(s=>s.title));
+ }
+ const p=structuredClone(catalog['destination-tibet'].product);p.sections=[{title:'Extra day',description:'Continue exploring.'}];
+ assert(renderCatalogProduct(p,env.SITE_URL).includes('<span>DAY 05</span><div><h3>Extra day</h3>'));
+ p.sections=[{title:'DAY 06',description:'Continue exploring.'}];
+ assert(renderCatalogProduct(p,env.SITE_URL).includes('<span>DAY 06</span><div><p>Continue exploring.</p>'));
+ const other=structuredClone(catalog['wildlife-sanjiangyuan-snow-leopard'].product);other.sections=additions;
+ assert(renderCatalogProduct(other,env.SITE_URL).includes('<article class="article-section"><h2>DAY 06 — Tashilhunpo &amp; a return to Lhasa</h2>'));
+});
 test('draft privacy, saved preview, publication and revision conflicts',async()=>{
  const {call,page}=await setup();
  assert.equal((await call('product',null,{anonymous:true})).status,401);
