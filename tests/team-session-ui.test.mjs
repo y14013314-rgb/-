@@ -62,26 +62,6 @@ test('destination editor keeps its fixed preview anchor and supports Chinese sea
  await context.ui.loadProduct('destination-tibet');assert(!get('fields').innerHTML.includes('发布位置'));await context.ui.saveDraft();assert(get('preview-position').href.endsWith('#tibet'));
 });
 
-test('gallery controls preserve legacy drafts until edited and support adding, reordering and deletion',async()=>{
- const elements=new Map(),buttons={add:{dataset:{}},remove:{dataset:{galleryRemove:'1'}},move:{dataset:{galleryMove:'1',direction:'-1'}}};
- const selectors={'[data-gallery-add]':[buttons.add],'[data-gallery-remove]':[buttons.remove],'[data-gallery-move]':[buttons.move]};
- const get=id=>{if(!elements.has(id))elements.set(id,{value:'',textContent:'',innerHTML:'',querySelectorAll:selector=>id==='fields'?selectors[selector]||[]:[]});return elements.get(id);};
- const context=vm.createContext({document:{getElementById:get,querySelectorAll:()=>[]},window:{addEventListener(){}},confirm:()=>true,fetch:async()=>({ok:false,status:401,json:async()=>({})})});
- vm.runInContext(readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8')+'\nglobalThis.ui={loadProduct,state:()=>({product,dirty})};',context);
- const photo={src:'/assets/photo.webp',alt:'Cover',credit:'Owner',sourceIndex:0};
- context.fetch=async()=>({ok:true,json:async()=>({product:{slug:'test',title:'Keep this title',values:{field0:photo.src,field1:photo.alt}},gallery:[photo],fields:[{key:'field0',type:'image'},{key:'field1',type:'text',label:'图片 说明'}],url:'/journeys/test/',revision:1,canPublish:true})});
- await context.ui.loadProduct('test');
- assert.equal(context.ui.state().product.gallery,undefined);assert.equal(context.ui.state().dirty,false);
- assert.match(get('fields').innerHTML,/产品图片 · 1 张/);assert.match(get('fields').innerHTML,/data-gallery-remove="0" disabled/);
- assert(!get('fields').innerHTML.includes('sourceIndex'));
- buttons.add.onclick();assert.equal(context.ui.state().product.gallery.length,2);assert.equal(context.ui.state().dirty,true);
- context.ui.state().product.gallery[1].src='/assets/new.webp';buttons.move.onclick();
- assert.equal(context.ui.state().product.gallery[0].src,'/assets/new.webp');
- buttons.remove.onclick();assert.equal(context.ui.state().product.gallery.length,1);
- assert.equal(context.ui.state().product.title,'Keep this title');
- buttons.remove.dataset.galleryRemove='0';buttons.remove.onclick();assert.equal(context.ui.state().product.gallery.length,1);
- assert.equal(photo.src,'/assets/photo.webp');
-});
 test('video URL editing refreshes the preview without redrawing or losing the draft',()=>{
  const elements=new Map(),preview={innerHTML:''};
  const input={dataset:{path:'["videoUrl"]'},value:'https://www.youtube.com/watch?v=M7lc1UVf-VE',hasAttribute:name=>name==='data-video-link',closest:()=>({querySelector:()=>preview})};

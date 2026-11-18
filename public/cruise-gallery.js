@@ -11,7 +11,7 @@ function mount(){
  track.prepend(copy(slides[count-1]));track.append(copy(slides[0]));
  let current=0,frame=0,settleTimer;
  const wrap=i=>(i%count+count)%count;
- function sync(){if(!track.clientWidth)return;current=wrap(Math.round(track.scrollLeft/track.clientWidth)-1);dots.forEach((dot,i)=>dot.setAttribute('aria-current',String(i===current)));status.textContent=`${current+1} / ${count}`;credit.textContent=slides[current].dataset.credit??'';}
+ function sync(){if(!track.clientWidth)return;current=wrap(Math.round(track.scrollLeft/track.clientWidth)-1);dots.forEach((dot,i)=>dot.setAttribute('aria-current',String(i===current)));status.textContent=`${current+1} / ${count}`;credit.textContent=slides[current].dataset.credit||(hero.hasAttribute('data-custom-gallery')?'':'Cruise brochure image');}
  function settle(){const position=Math.round(track.scrollLeft/track.clientWidth);if(position===0)track.scrollTo({left:count*track.clientWidth,behavior:'instant'});else if(position===count+1)track.scrollTo({left:track.clientWidth,behavior:'instant'});sync();}
  function move(physical){track.scrollTo({left:physical*track.clientWidth,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
  hero.querySelector('.cruise-hero-prev').addEventListener('click',()=>{settle();move(current);},options);
