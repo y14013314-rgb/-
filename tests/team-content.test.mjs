@@ -115,6 +115,38 @@ test('destination additions continue the existing day list in preview and only g
  const other=structuredClone(catalog['wildlife-sanjiangyuan-snow-leopard'].product);other.sections=additions;
  assert(renderCatalogProduct(other,env.SITE_URL).includes('<article class="article-section"><h2>DAY 06 — Tashilhunpo &amp; a return to Lhasa</h2>'));
 });
+test('product photo counts persist through drafts, previews, publication and template cloning',async()=>{
+ const {call,env}=await setup();
+ for(const baseSlug of ['baiyun','chengdu','classic-china','gold-cruises']){
+  const slug='gallery-'+baseSlug;
+  assert.equal((await call('create',{baseSlug,slug,title:'Gallery test'})).status,201);
+  const initial=await (await call('product?slug='+slug)).json();
+  assert(initial.gallery.length>0);assert.equal(initial.product.gallery,undefined);
+  const product=initial.product;
+  product.gallery=Array.from({length:3},(_,index)=>({src:`https://example.test/${slug}-${index}.webp`,alt:'Photo '+index,credit:''}));
+  assert.equal((await call('save',{product,revision:initial.revision})).status,200);
+  const saved=await (await call('product?slug='+slug)).json();
+  assert.deepEqual(saved.product.gallery,product.gallery);
+  assert.deepEqual(saved.gallery,product.gallery);
+  const preview=await (await call('preview?slug='+slug)).text();
+  for(const image of product.gallery)assert(preview.includes(image.src));
+  assert.equal((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published,null);
+  assert.equal((await call('publish',{slug,revision:saved.revision})).status,200);
+  const published=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();
+  assert.deepEqual(JSON.parse(published.published).gallery,product.gallery);
+  const cloneSlug=slug+'-clone';
+  assert.equal((await call('create',{baseSlug:slug,slug:cloneSlug,title:'Copy'})).status,201);
+  assert.deepEqual((await (await call('product?slug='+cloneSlug)).json()).product.gallery,product.gallery);
+  product.gallery=[product.gallery[2]];
+  assert.equal((await call('save',{product,revision:saved.revision+1})).status,200);
+  assert.equal(JSON.parse((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published).gallery.length,3);
+  const reduced=await (await call('preview?slug='+slug)).text();
+  assert(reduced.includes(product.gallery[0].src));
+  assert(!reduced.includes(`https://example.test/${slug}-0.webp`));
+  assert.equal((await call('publish',{slug,revision:saved.revision+2})).status,200);
+  assert.equal((await call('save',{product:{...product,gallery:[]},revision:saved.revision+3})).status,400);
+ }
+});
 test('draft privacy, saved preview, publication and revision conflicts',async()=>{
  const {call,page}=await setup();
  assert.equal((await call('product',null,{anonymous:true})).status,401);
