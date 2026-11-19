@@ -1,6 +1,7 @@
 import {withAnalytics} from '../lib/content/analytics.mjs';
 import { buildCatalog } from './catalog.mjs';
 import { renderTrain } from '../lib/content/render-train.mjs';
+import {collections,cardPattern} from '../lib/content/editorial.mjs';
 import { cpSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const source = join(root, 'public');
 const catalog = buildCatalog(root);
-writeFileSync(join(root, 'lib/content/catalog-seed.mjs'), 'export default ' + JSON.stringify(catalog) + ';\n');
 const output = join(root, 'pages-dist');
 const live = process.env.SITE_URL === 'https://sukhatrip.com'
   && (!process.env.CF_PAGES || process.env.CF_PAGES_BRANCH === 'codex/pages-preview');
@@ -38,6 +38,12 @@ const { detail, card } = renderTrain(product, template, origin);
 const collectionSource = readFileSync(join(source, collection, 'index.html'), 'utf8');
 const cardSlot = /<article class="cruise-collection-card" id="baiyun">[\s\S]*?<\/article>/;
 if (!cardSlot.test(collectionSource)) throw new Error('Cannot locate the Baiyun collection card.');
+const collectionTemplates=Object.fromEntries(Object.keys(collections).map(category=>{
+  const html=readFileSync(join(source,category,'index.html'),'utf8');
+  return [category,category==='silk-road-luxury-trains'?html.replace(cardSlot,()=>card):html];
+}));
+const cards=Object.fromEntries(Object.values(collectionTemplates).flatMap(html=>[...html.matchAll(cardPattern)].map(([article])=>[article.match(/href="[^\"]+\/([^/\"]+)\/"/)?.[1],article])));
+writeFileSync(join(root,'lib/content/catalog-seed.mjs'),'export default '+JSON.stringify(catalog)+';\nexport const collectionTemplates='+JSON.stringify(collectionTemplates)+';\nexport const cards='+JSON.stringify(cards)+';\n');
 
 const excluded = new Set(['admin', 'quote', 'inquiry-submit.js', 'assets/trains/collection-film.mp4']);
 rmSync(output, { recursive: true, force: true });

@@ -182,6 +182,7 @@ const routes=[
   }
 ];
 const q=id=>document.getElementById(id),date=q('explorer-date'),suite=q('explorer-suite'),extension=q('explorer-extension'),adults=q('explorer-adults'),children=q('explorer-children'),ages=q('explorer-ages'),link=q('explorer-inquire');
+const routeButtons=[...document.querySelectorAll('[data-explorer-route]')].map(button=>({button,label:button.textContent}));
 let selected=routes[0];
 const formatDate=value=>new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(value+'T12:00:00Z'));
 function update(){
@@ -194,10 +195,10 @@ function choose(id,scroll){
  selected=routes.find(r=>r.id===id);
  date.replaceChildren(new Option('Flexible — help me choose',''),...selected.dates.map(d=>new Option(formatDate(d),d)));
  q('explorer-selected').textContent=selected.name+' · '+selected.days+' days / '+(selected.days-1)+' nights';
- document.querySelectorAll('[data-explorer-route]').forEach(b=>{const active=b.dataset.explorerRoute===id;b.setAttribute('aria-pressed',String(active));b.textContent=active?'Selected ✓':'Choose this voyage ↗';});
+ routeButtons.forEach(({button,label})=>{const active=button.dataset.explorerRoute===id;button.setAttribute('aria-pressed',String(active));button.textContent=active?'Selected ✓':label;});
  update();if(scroll)q('explorer-config').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
 }
-document.querySelectorAll('[data-explorer-route]').forEach(b=>b.addEventListener('click',()=>choose(b.dataset.explorerRoute,true)));
+routeButtons.forEach(({button})=>button.addEventListener('click',()=>choose(button.dataset.explorerRoute,true)));
 [date,suite,extension,adults,children,ages].forEach(el=>el.addEventListener('input',update));
 link.addEventListener('click',e=>{if(!adults.reportValidity()||!children.reportValidity()){e.preventDefault();e.stopPropagation();}});
 choose(selected.id,false);

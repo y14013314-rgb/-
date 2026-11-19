@@ -13,7 +13,7 @@ import {onMembers} from '../lib/content/members.mjs';
 import {member} from '../lib/content/auth.mjs';
 import {onContent} from '../lib/content/content-api.mjs';
 import {published} from '../lib/content/published.mjs';
-import {digest} from '../lib/content/auth.mjs';
+import {cookieName,digest} from '../lib/content/auth.mjs';
 import {validateProduct} from '../lib/content/product.mjs';
 import {renderTrain} from '../lib/content/render-train.mjs';
 import template from '../lib/content/train-template.mjs';
@@ -271,12 +271,65 @@ test('existing products can be withdrawn without erasing drafts and homepage sta
  assert.equal((await call('unpublish',{slug:'homepage',revision:0})).status,400);
  const home=await (await call('product?slug=homepage')).json();assert(home.fields.length>0);assert.equal(home.canUnpublish,false);
  assert.equal((await call('save',{product:home.product,revision:0})).status,200);assert.equal((await call('publish',{slug:'homepage',revision:1})).status,200);
- const list=await (await call('products')).json();assert.equal(list.products.length,36);assert(list.templates.every(p=>!['homepage','destination-tibet'].includes(p.slug)));
+ const list=await (await call('products')).json();assert.equal(list.products.length,38);assert.deepEqual(list.products.filter(p=>p.category==='collection').map(p=>p.slug),['train-collection-page','cruise-collection-page']);assert(list.templates.every(p=>p.category!=='collection'&&!['homepage','destination-tibet'].includes(p.slug)));
 });
 test('new Baiyun-based product retains structured editing and its own URL',async()=>{
  const {call,env}=await setup();const slug='new-rail';assert.equal((await call('create',{slug,title:'New Rail',baseSlug:'baiyun'})).status,201);
  const item=await (await call('product?slug='+slug)).json();assert(item.product.itinerary);assert.equal((await call('save',{revision:1,product:item.product})).status,200);assert.equal((await call('publish',{slug,revision:2})).status,200);
  const page=await onCatalogPage({env,params:{slug},request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'+slug+'/'),next:async()=>new Response('missing',{status:404})});assert.equal(page.status,200);assert((await page.text()).includes('New Rail'));
+});
+test('rail and cruise collection copy, breadcrumb and product cards are published independently',async()=>{
+ const {call,env,token}=await setup(),railPath='/silk-road-luxury-trains/',cruisePath='/yangtze-river-cruises/';
+ const listing=(path,search='',authorized=true)=>catalogCollection({env,request:new Request(env.SITE_URL+path+search,{headers:authorized?{Cookie:`${cookieName}=${token}`}:{}}),next:async()=>new Response(readFileSync(new URL('../public'+path+'index.html',import.meta.url),'utf8'))});
+ const rail=await (await call('product?slug=train-collection-page')).json();
+ const header=rail.editor.pageFields.find(field=>field.value==='different pace.');assert(header);
+ assert.equal(rail.canUnpublish,false);
+ rail.product.pageCopy={[header.key]:'A slower pace <test>.'};rail.product.backLabel='← Back to trains';
+ assert.equal((await call('save',{product:rail.product,revision:0})).status,200);
+ assert.equal((await call('preview?slug=train-collection-page')).headers.get('Location'),env.SITE_URL+railPath+'?team-preview=train-collection-page');
+ assert.equal((await listing(railPath,'?team-preview=train-collection-page',false)).status,401);
+ assert((await (await listing(railPath,'?team-preview=train-collection-page')).text()).includes('<em>A slower pace &lt;test&gt;.</em>'));
+ assert(!(await (await listing(railPath)).text()).includes('A slower pace'));
+ await call('publish',{slug:rail.product.slug,revision:1});
+ assert((await (await listing(railPath)).text()).includes('A slower pace'));assert(!(await (await listing(cruisePath)).text()).includes('A slower pace'));
+ const train=await (await call('product?slug=chengdu')).json();
+ assert.equal(train.editor.card.eyebrow,'熊猫专列·成都号');assert.equal(train.editor.card.duration,'16 days · 2027');
+ train.product.cardCopy={eyebrow:'New label',duration:'12 days · 2028',description:'New card description',route:'Chengdu · Xi’an',button:'Read more ↗',credit:'Licensed train photo',photo:'/assets/trains/baiyun-salon.webp'};
+ train.product.breadcrumbTitle='Chengdu listing detail';
+ assert.equal((await call('save',{product:train.product,revision:0})).status,200);
+ const detail=await (await call('preview?slug=chengdu')).text();
+ assert(detail.includes('href="/silk-road-luxury-trains/">← Back to trains</a><span>Chengdu listing detail</span>'));assert(!detail.includes('New card description'));
+ assert(!(await (await listing(railPath)).text()).includes('New card description'));
+ const preview=await (await listing(railPath,'?team-preview=chengdu')).text();
+ for(const text of Object.values(train.product.cardCopy))assert(preview.includes(text),text);
+ await call('publish',{slug:'chengdu',revision:1});assert((await (await listing(railPath)).text()).includes('New card description'));
+ assert.equal((await call('unpublish',{slug:rail.product.slug,revision:2})).status,400);
+});
+test('route versions and day ranges retain existing text and support independent edits and photos',async()=>{
+ const {call,env}=await setup();
+ for(const slug of ['baiyun','chengdu','jinxiu-dongfang','jinxiu-tianfu']){
+  const loaded=await (await call('product?slug='+slug)).json();assert(loaded.editor.plan.editions.length>=2);assert(loaded.editor.plan.itinerary.length>=5);
+ }
+ const slug='chengdu',loaded=await (await call('product?slug='+slug)).json(),{product,editor}=loaded;
+ assert.deepEqual(editor.plan.editions.map(item=>item.title),['Autumn · 秋韵鎏境','Midsummer · 仲夏长卷']);
+ const untouched=await (await call('preview?slug='+slug)).text(),day=editor.plan.itinerary[0],photo={src:'/assets/trains/baiyun-salon.webp',alt:'Lakeside & train',credit:'Licensed photo'};
+ const removed=editor.plan.itinerary.pop(),summer=editor.plan.editions[1];
+ product.plan={itinerary:[...editor.plan.itinerary.reverse(),{title:'Day 12 · Return',description:'Return journey',photo}],editions:[summer,{...editor.plan.editions[0],title:'Private autumn',ownItinerary:true,days:'12 days',route:'Chengdu → Kashgar',itinerary:[{title:'Days 1–3 · Mountain journey',description:'Private route',photo}]}]};
+ product.introPhoto=photo;
+ product.gallery=[{...photo,alt:''}];
+ const button=editor.pageFields.find(field=>field.value==='Request a tailored quote ↗');product.pageCopy={[button.key]:'Ask about this itinerary ↗'};
+ assert.equal((await call('save',{product,revision:0})).status,200);
+ const saved=await (await call('product?slug='+slug)).json();assert.deepEqual(saved.product.plan,product.plan);assert.deepEqual(saved.product.values,loaded.product.values);
+ const preview=await (await call('preview?slug='+slug)).text();
+ assert(preview.indexOf(summer.title)<preview.indexOf('Private autumn'));assert(preview.includes('Days 1–3 · Mountain journey'));assert(preview.includes('12 days · Chengdu → Kashgar'));
+ assert(!preview.includes(removed.title));assert(preview.includes(day.title));assert(preview.includes('Day 12 · Return'));
+ assert.equal((preview.match(/class="product-inline-photo"/g)||[]).length,3);assert(preview.includes('Lakeside &amp; train'));assert(preview.includes('Ask about this itinerary ↗'));
+ assert(!untouched.includes('Private autumn'));assert(!renderContent(catalog['jinxiu-tianfu'].product,env.SITE_URL).includes('Private route'));
+ assert.equal((await call('save',{product:{...product,introPhoto:{...photo,src:'javascript:alert(1)'}},revision:1})).status,400);
+ const cruise=await (await call('product?slug=yangzi-explorer')).json();assert.equal(cruise.editor.plan.voyages.length,6);
+ cruise.product.plan=cruise.editor.plan;cruise.product.plan.voyages[0].itinerary=[{title:'Day 1 · Chongqing arrival',description:'Independent cruise itinerary',photo}];
+ assert.equal((await call('save',{product:cruise.product,revision:0})).status,200);
+ const cruisePreview=await (await call('preview?slug=yangzi-explorer')).text();assert(cruisePreview.includes('Day 1 · Chongqing arrival'));assert(cruisePreview.includes('data-explorer-route="downstream"'));
 });
 
 test('delete removes only unpublished or withdrawn custom records and rejects stale requests',async()=>{

@@ -40,10 +40,13 @@ $('back').onclick=()=>{challenge=null;$('code').value='';$('verify').hidden=true
 $('logout').onclick=()=>action($('workspace'),async()=>{await api('logout',{});location.reload();});
 
 let product,revision,dirty=false,selectedSlug='baiyun',fieldSpecs=[],activeTab='basic',existingVideos=[],placementChoices=[],initialGallery=null;
-let copyView='quick';
+let editorDefaults={};
+let copyView='quick',copyViewChosen=false;
 try{const saved=localStorage.getItem('teamCopyView');if(saved==='quick'||saved==='all')copyView=saved;}catch{}
 const labels={sections:'补充行程与内容',gallery:'附加图片（可新增多张）',values:'页面内容（按页面顺序）',title:'英文名称 / 标题',localTitle:'中文名称',description:'英文介绍',year:'年份',days:'天数',route:'路线（每行一个地点）',image:'主图',src:'素材路径或 HTTPS 地址',alt:'图片说明',credit:'素材来源说明',film:'视频',poster:'视频封面图片',price:'价格',status:'展示方式',currency:'币种',amount:'金额',highlights:'产品亮点',editions:'路线版本',supplement:'附加费用',option:'费用选项说明',unit:'计价单位',source:'费用来源',itinerary:'行程',planningNote:'预订说明',accessNote:'出行限制说明',sources:'参考资料（每行一条）'};
 const categoryNames={home:'首页',journeys:'私人行程','silk-road-luxury-trains':'列车','yangtze-river-cruises':'游轮',destinations:'目的地','signature-experiences':'主题体验',experiences:'城市体验',wildlife:'野生动物'};
+categoryNames.collection='栏目页';
+Object.assign(labels,{pageCopy:'页面文字',backLabel:'详情页顶部「返回栏目」文字',breadcrumbTitle:'详情页顶部显示名称（留空跟随产品名称）',introPhoto:'介绍配图（可选）',cardCopy:'栏目卡片',eyebrow:'小标题 / 中文标签',duration:'展示天数与年份',button:'按钮文字',photo:'配图',itinerary:'行程段',ownItinerary:'使用此版本自己的行程',days:'天数',voyages:'游轮航线',priceNote:'卡片价格文案'});
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function youtubeEmbedUrl(value){
  let url;try{url=new URL(value);}catch{return '';}
@@ -58,23 +61,40 @@ function videoPreview(value){
 }
 function primaryImageFieldKey(){return fieldSpecs.find(f=>f.type==='image')?.key||'';}
 function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slug','templateSlug','featured','sourceIndex'].includes(k)).map(([k,v])=>{
- const p=[...path,k],key=esc(JSON.stringify(p)),label=fieldSpecs.find(f=>f.key===k)?.label||labels[k]||k;
+ const p=[...path,k],key=esc(JSON.stringify(p)),label=(path[0]==='pageCopy'?editorDefaults.pageFields?.find(f=>f.key===k)?.label:fieldSpecs.find(f=>f.key===k)?.label)||labels[k]||k;
  if(k==='placement')return `<label>发布位置<select data-path="${key}">${placementChoices.map(o=>`<option value="${esc(o.value)}" ${v===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select><small>保存草稿并发布后，会移到所选栏目。产品详情网址保持不变。</small></label>`;
- if(typeof v==='boolean')return `<label class="check-label"><input type="checkbox" data-path="${key}" data-type="boolean" ${v?'checked':''}> ${esc(label)}</label>`;
+ if(typeof v==='boolean')return `<label class="check-label"><input type="checkbox" data-path="${key}" data-type="boolean" ${k==='ownItinerary'?'data-redraw':''} ${v?'checked':''}> ${esc(label)}</label>`;
  if(Array.isArray(v)){
   if(k==='route'||k==='sources')return `<label>${esc(label)}<textarea data-path="${key}" data-type="lines" rows="4">${esc(v.join('\n'))}</textarea></label>`;
   return `<fieldset><legend>${esc(label)}</legend>${v.map((x,i)=>`<fieldset><legend>第 ${i+1} 项</legend>${fields(x,[...p,i])}${k==='gallery'?`<p><button type="button" data-move="${esc(JSON.stringify([...p,i]))}" data-dir="up" ${i===0?'disabled':''}>上移</button> <button type="button" data-move="${esc(JSON.stringify([...p,i]))}" data-dir="down" ${i===v.length-1?'disabled':''}>下移</button> <button type="button" data-set-cover="${esc(JSON.stringify([...p,i]))}" ${!x?.src?'disabled':''}>设为封面</button></p>`:''}<button type="button" data-remove="${esc(JSON.stringify([...p,i]))}">删除此项</button></fieldset>`).join('')}<button type="button" data-add="${key}">添加一项</button></fieldset>`;
  }
  if(v&&typeof v==='object')return `<fieldset><legend>${esc(label)}</legend>${fields(v,p)}</fieldset>`;
  if(k==='status'&&path[0]==='price')return `<label>${esc(label)}<select data-path="${key}"><option value="on-request" ${v==='on-request'?'selected':''}>询价 · Price on request</option><option value="from" ${v==='from'?'selected':''}>每人起价 · From</option></select></label>`;
- const isImage=(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||(path[0]==='gallery'&&k==='src')||fieldSpecs.find(f=>f.key===k)?.type==='image';
- if(isImage)return `<article class="media-card"><div class="media-frame"><img ${v?`src="${esc(v)}"`:'hidden'} alt="${esc(label)}" loading="lazy"></div><div class="media-copy"><strong>${esc(label)}</strong><label class="upload-button">选择或更换图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label><small>支持 JPG、PNG、WebP，自动压缩</small><details><summary>使用已有图片链接</summary><textarea data-image-link data-path="${key}">${esc(v)}</textarea></details></div></article>`;
+ const optionalImage=(k==='src'&&(path[0]==='introPhoto'||path[0]==='plan'))||(path[0]==='cardCopy'&&k==='photo');
+ const isImage=optionalImage||(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||(path[0]==='gallery'&&k==='src')||fieldSpecs.find(f=>f.key===k)?.type==='image';
+ if(isImage)return `<article class="media-card"><div class="media-frame"><img ${v?`src="${esc(v)}"`:'hidden'} alt="${esc(label)}" loading="lazy"></div><div class="media-copy"><strong>${esc(label)}</strong><label class="upload-button">选择或更换图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label>${optionalImage&&v?` <button type="button" data-clear-image="${key}">${path[0]==='cardCopy'?'恢复默认图':'移除配图'}</button>`:''}<small>支持 JPG、PNG、WebP，自动压缩</small><details><summary>使用已有图片链接</summary><textarea aria-label="${esc(label)}链接" data-image-link data-path="${key}">${esc(v)}</textarea></details></div></article>`;
  if((path[0]==='film'&&k==='src')||k==='videoUrl')return `<article class="media-card"><div data-video-preview>${videoPreview(v)}</div><div class="media-copy"><strong>产品视频</strong><p>可上传 99 MB 以内的 MP4，或粘贴 YouTube 视频链接。修改后请保存草稿、预览并发布。</p><label class="upload-button">选择或更换视频<input type="file" accept="video/mp4,.mp4" data-video-upload="${key}"></label><details><summary>修改视频链接</summary><textarea aria-label="视频链接" data-video-link data-path="${key}">${esc(v)}</textarea></details></div></article>`;
  return `<label>${esc(label)}${typeof v==='number'?`<input type="number" step="any" data-path="${key}" data-type="number" value="${esc(v)}">`:`<textarea data-path="${key}" rows="${['description','planningNote','accessNote'].includes(k)?4:2}">${esc(v)}</textarea>`}</label>${(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||(path[0]==='gallery'&&k==='src')||fieldSpecs.find(f=>f.key===k)?.type==='image'?`<label>从电脑上传图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label>`:''}`;
  }).join('');}
 function at(path){
  if(path[0]==='gallery'&&initialGallery&&!product.galleryUnified){product.gallery=initialGallery.map(item=>({...item}));product.galleryUnified=true;}
+ if(['cardCopy','pageCopy','introPhoto','plan'].includes(path[0])&&!product[path[0]])product[path[0]]=path[0]==='plan'?structuredClone(editorDefaults.plan):path[0]==='introPhoto'?blankPhoto():{};
  return path.reduce((x,k)=>x[k],product);
+}
+const blankPhoto=()=>({src:'',alt:'',credit:''});
+const blankDay=()=>({title:'',description:'',photo:blankPhoto()});
+const blankEdition=()=>({...blankDay(),ownItinerary:false,days:'',route:'',itinerary:[]});
+function planList(items,path,caption,render){
+ const key=esc(JSON.stringify(path));
+ return `<fieldset class="plan-list"><legend>${caption} · ${items.length} 项</legend>${items.map((item,index)=>{
+  const itemPath=[...path,index],target=esc(JSON.stringify(itemPath));
+  return `<fieldset class="plan-item"><legend>第 ${index+1} 项</legend><div class="gallery-actions"><button type="button" data-move="${target}" data-dir="up" ${index===0?'disabled':''}>上移</button><button type="button" data-move="${target}" data-dir="down" ${index===items.length-1?'disabled':''}>下移</button><button type="button" data-remove="${target}">删除此项</button></div>${render(item,itemPath)}</fieldset>`;
+ }).join('')}<button type="button" data-add="${key}">＋ 新增${caption}</button></fieldset>`;
+}
+function planEditor(plan){
+ const days=(items,path)=>planList(items,path,'行程段',fields);
+ if(plan.voyages)return plan.voyages.map((voyage,index)=>`<fieldset><legend>${esc(voyage.title)}</legend>${days(voyage.itinerary,['plan','voyages',index,'itinerary'])}</fieldset>`).join('');
+ return `<p>每段可填写一天或一个日期范围，增删不会自动修改产品总天数。未设置独立行程的版本沿用下方的共用行程。</p>`+planList(plan.editions,['plan','editions'],'路线版本',(edition,path)=>fields({title:edition.title,description:edition.description,photo:edition.photo,ownItinerary:edition.ownItinerary},path)+(edition.ownItinerary?fields({days:edition.days,route:edition.route},path)+days(edition.itinerary,[...path,'itinerary']):''))+days(plan.itinerary,['plan','itinerary']);
 }
 function galleryFields(items){
  return `<section class="gallery-editor"><h3>产品图片 · ${items.length} 张</h3><button type="button" data-gallery-add ${items.length>=50?'disabled':''}>＋ 添加图片</button><div class="gallery-items">${items.map((item,index)=>`<fieldset><legend>第 ${index+1} 张${index===0?' · 封面':''}</legend><div class="gallery-actions"><button type="button" data-gallery-move="${index}" data-direction="-1" ${index===0?'disabled':''} aria-label="上移第 ${index+1} 张图片">上移</button><button type="button" data-gallery-move="${index}" data-direction="1" ${index===items.length-1?'disabled':''} aria-label="下移第 ${index+1} 张图片">下移</button><button type="button" data-gallery-remove="${index}" ${items.length===1?'disabled':''} aria-label="删除第 ${index+1} 张图片">删除图片</button></div>${fields(item,['gallery',index])}</fieldset>`).join('')}</div></section>`;
@@ -89,16 +109,19 @@ function classifyCopyField(spec){
 function draw(){
  if(product.price&&!product.price.currency)product.price.currency='CNY';
  if(product.price&&product.price.amount===undefined)product.price.amount=0;
- const groups={basic:[],media:[],content:[],price:[]};
+ const groups={basic:[],card:[],media:[],plan:[],content:[],price:[]};
  const gallery=product.galleryUnified?product.gallery:initialGallery;
  if(gallery)groups.media.push(galleryFields(gallery));
- if(product.values){
+ if(editorDefaults.collection){
+  groups.content.push(fields({backLabel:product.backLabel}));
+ }else if(product.values){
   groups.basic.push(fields(placementChoices.length?{title:product.title,placement:product.placement}:{title:product.title}));
   const media={},text={},quick={nav:{},footer:{},cta:{}};
   for(const [key,value]of Object.entries(product.values)){
    const spec=fieldSpecs.find(f=>f.key===key);
    if(spec?.type==='image'){if(!gallery)media[key]=value;continue;}
    if(gallery&&spec?.label==='图片 说明')continue;
+   if(editorDefaults.planFields?.includes(key))continue;
    text[key]=value;
    const group=classifyCopyField(spec);
    if(group!=='other')quick[group][key]=value;
@@ -109,31 +132,43 @@ function draw(){
   if(Object.keys(quick.nav).length)quickBlocks.push(`<fieldset><legend>快捷：导航文案</legend>${fields(quick.nav,['values'])}</fieldset>`);
   if(Object.keys(quick.footer).length)quickBlocks.push(`<fieldset><legend>快捷：页脚文案</legend>${fields(quick.footer,['values'])}</fieldset>`);
   if(Object.keys(quick.cta).length)quickBlocks.push(`<fieldset><legend>快捷：CTA 文案</legend>${fields(quick.cta,['values'])}</fieldset>`);
-  groups.content.push(`<div class="copy-view-toggle"><button type="button" data-copy-view="quick" aria-pressed="${copyView==='quick'}">快捷分组</button><button type="button" data-copy-view="all" aria-pressed="${copyView==='all'}">全部字段</button></div>`);
-  groups.content.push(`<div data-copy-quick ${copyView==='quick'?'':'hidden'}>${quickBlocks.join('')||'<p>当前页面没有可识别的快捷文案分组。</p>'}</div>`);
-  groups.content.push(`<div data-copy-all ${copyView==='quick'?'hidden':''}><fieldset><legend>完整：页面文字</legend>${fields(text,['values'])}</fieldset></div>`);
+  {
+   const all=editorDefaults.plan&&!copyViewChosen||copyView==='all';
+   groups.content.push(`<div class="copy-view-toggle"><button type="button" data-copy-view="quick" aria-pressed="${!all}">快捷分组</button><button type="button" data-copy-view="all" aria-pressed="${Boolean(all)}">全部字段</button></div>`);
+   groups.content.push(`<div data-copy-quick ${all?'hidden':''}>${quickBlocks.join('')||'<p>当前页面没有可识别的快捷文案分组。</p>'}</div>`);
+   groups.content.push(`<div data-copy-all ${all?'':'hidden'}><fieldset><legend>完整：页面文字</legend>${fields(text,['values'])}</fieldset></div>`);
+  }
   groups.content.push(fields({sections:product.sections||[]}));
  }else{
-  for(const [key,value]of Object.entries(product)){if(['slug','templateSlug','featured','gallery','galleryUnified'].includes(key)||(gallery&&key==='image'))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
+  for(const [key,value]of Object.entries(product)){if(['slug','templateSlug','featured','gallery','galleryUnified','cardCopy','pageCopy','breadcrumbTitle','plan','introPhoto'].includes(key)||(editorDefaults.rail&&['editions','itinerary'].includes(key))||(gallery&&key==='image'))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
  }
- const names={basic:'基本信息',media:'图片与视频',content:'行程与文字',price:'价格'};
+ if(editorDefaults.plan){
+  groups.basic.push(fields({breadcrumbTitle:product.breadcrumbTitle??editorDefaults.breadcrumbTitle??''}));
+  groups.plan.push(planEditor(product.plan||editorDefaults.plan));
+  groups.content.unshift(fields({introPhoto:product.introPhoto||blankPhoto()}));
+ }
+ if(editorDefaults.card)groups.card.push('<p>这里只修改栏目列表。未单独选图时沿用当前默认图；更换不会影响详情图库。</p>'+fields({...editorDefaults.card,...product.cardCopy,photo:product.cardCopy?.photo||editorDefaults.card.photo},['cardCopy']));
+ if(editorDefaults.pageFields?.length)groups.content.push('<fieldset><legend>页面标题、按钮与其他文字</legend>'+fields(Object.fromEntries(editorDefaults.pageFields.map(field=>[field.key,product.pageCopy?.[field.key]??field.value])),['pageCopy'])+'</fieldset>');
+ const names={basic:'基本信息',card:'栏目卡片',media:'图片与视频',plan:'独立行程',content:editorDefaults.collection?'栏目文字':'行程与文字',price:'价格'};
  const available=Object.keys(groups).filter(k=>groups[k].join('').length);if(!available.includes(activeTab))activeTab=available[0];
  $('editor-tabs').innerHTML=available.map(k=>`<button type="button" data-tab="${k}" aria-pressed="${k===activeTab}">${names[k]}</button>`).join('');
- $('fields').innerHTML=available.map(k=>`<section class="editor-panel" data-panel="${k}" ${k===activeTab?'':'hidden'}>${groups[k].join('')}</section>`).join('');
+ $('fields').innerHTML=available.map(k=>`<section class="editor-panel" data-panel="${k}" ${k===activeTab?'':'hidden'}>${k==='content'&&editorDefaults.pageFields?.length?'<label class="editor-search">查找文案<input type="search" data-copy-search placeholder="输入页面文字"></label>':''}${groups[k].join('')}</section>`).join('');
  $('editor-tabs').querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;$('fields').querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==activeTab);$('editor-tabs').querySelectorAll('[data-tab]').forEach(t=>t.setAttribute('aria-pressed',String(t.dataset.tab===activeTab)));});
- $('fields').querySelectorAll('[data-path]').forEach(input=>{input.oninput=()=>{const p=JSON.parse(input.dataset.path),key=p.pop();at(p)[key]=input.dataset.type==='boolean'?input.checked:input.dataset.type==='number'?Number(input.value):input.dataset.type==='lines'?input.value.split('\n').filter(s=>s.trim()):input.value;dirty=true;};input.onchange=()=>{input.oninput();if(input.hasAttribute('data-video-link'))input.closest('.media-card').querySelector('[data-video-preview]').innerHTML=videoPreview(input.value);if(input.hasAttribute('data-image-link')){const img=input.closest('.media-card').querySelector('img');img.hidden=!input.value;if(input.value)img.src=input.value;else img.removeAttribute('src');}};});
+ $('fields').querySelectorAll('[data-path]').forEach(input=>{input.oninput=()=>{const p=JSON.parse(input.dataset.path),key=p.pop();at(p)[key]=input.dataset.type==='boolean'?input.checked:input.dataset.type==='number'?Number(input.value):input.dataset.type==='lines'?input.value.split('\n').filter(s=>s.trim()):input.value;if(editorDefaults.plan&&!p.length&&key==='title'&&product.breadcrumbTitle===undefined)product.breadcrumbTitle='';dirty=true;};input.onchange=()=>{input.oninput();if(input.hasAttribute('data-video-link'))input.closest('.media-card').querySelector('[data-video-preview]').innerHTML=videoPreview(input.value);if(input.hasAttribute('data-image-link')){const img=input.closest('.media-card').querySelector('img');img.hidden=!input.value;if(input.value)img.src=input.value;else img.removeAttribute('src');}if(input.hasAttribute('data-redraw'))draw();};});
+ $('fields').querySelectorAll('[data-copy-search]').forEach(input=>input.oninput=()=>{const query=input.value.trim().toLowerCase();input.closest('section').querySelectorAll('textarea').forEach(text=>{const label=text.closest('label');if(label)label.hidden=!(label.textContent+' '+text.value).toLowerCase().includes(query);});});
+ $('fields').querySelectorAll('[data-clear-image]').forEach(button=>button.onclick=()=>{const path=JSON.parse(button.dataset.clearImage),key=path.pop();at(path)[key]='';dirty=true;draw();});
  $('fields').querySelectorAll('[data-video-upload]').forEach(input=>input.onchange=()=>uploadVideo(input));
  $('fields').querySelectorAll('[data-upload]').forEach(input=>input.onchange=()=>uploadImage(input));
  $('fields').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{if(!confirm('删除这条内容？保存并发布后才影响官网。'))return;const p=JSON.parse(b.dataset.remove),i=p.pop();at(p).splice(i,1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{const p=JSON.parse(button.dataset.move),i=p.pop(),arr=at(p),target=button.dataset.dir==='up'?i-1:i+1;if(!Array.isArray(arr)||target<0||target>=arr.length)return;[arr[i],arr[target]]=[arr[target],arr[i]];dirty=true;draw();});
- $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const path=JSON.parse(b.dataset.add);let a=at(path);if(!Array.isArray(a)){let parent=product;for(let i=0;i<path.length-1;i++)parent=parent[path[i]];parent[path[path.length-1]]=[];a=parent[path[path.length-1]];}a.push(path[path.length-1]==='gallery'?{src:'',alt:'',credit:''}:{title:'',description:''});dirty=true;draw();});
+ $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const path=JSON.parse(b.dataset.add),key=path.at(-1);let items=at(path);if(!Array.isArray(items))items=at(path.slice(0,-1))[key]=[];items.push(path[0]==='plan'?(key==='editions'?blankEdition():blankDay()):key==='gallery'?blankPhoto():{title:'',description:''});dirty=true;draw();});
  $('fields').querySelectorAll('[data-set-cover]').forEach(button=>button.onclick=()=>{const p=JSON.parse(button.dataset.setCover),i=p.pop(),arr=at(p),item=Array.isArray(arr)?arr[i]:null,key=primaryImageFieldKey();if(!item?.src||!key||!product.values)return;product.values[key]=item.src;dirty=true;$('message').textContent='已设为封面图，请保存草稿并发布。';draw();});
- $('fields').querySelectorAll('[data-copy-view]').forEach(button=>button.onclick=()=>{copyView=button.dataset.copyView;try{localStorage.setItem('teamCopyView',copyView);}catch{}draw();});
+ $('fields').querySelectorAll('[data-copy-view]').forEach(button=>button.onclick=()=>{copyView=button.dataset.copyView;copyViewChosen=true;try{localStorage.setItem('teamCopyView',copyView);}catch{}draw();});
  $('fields').querySelectorAll('[data-gallery-add]').forEach(button=>button.onclick=()=>{const items=at(['gallery']);if(items.length>=50)return;items.push({src:'',alt:'',credit:''});dirty=true;draw();$('fields').querySelector('.gallery-items > fieldset:last-child')?.scrollIntoView({block:'center'});});
  $('fields').querySelectorAll('[data-gallery-remove]').forEach(button=>button.onclick=()=>{if(gallery.length<=1||!confirm('删除这张产品图片？保存并发布后才影响官网。'))return;at(['gallery']).splice(Number(button.dataset.galleryRemove),1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-gallery-move]').forEach(button=>button.onclick=()=>{const items=at(['gallery']),index=Number(button.dataset.galleryMove),target=index+Number(button.dataset.direction);if(target<0||target>=items.length)return;[items[index],items[target]]=[items[target],items[index]];dirty=true;draw();});
 }
-async function loadProduct(slug=selectedSlug){const v=await api('product?slug='+encodeURIComponent(slug));selectedSlug=slug;$('product-select').value=slug;product=v.product;initialGallery=v.gallery||null;placementChoices=v.placements||[];fieldSpecs=v.fields||[];existingVideos=v.videos||[];revision=v.revision;dirty=false;draw();$('live-link').href=v.url;$('delete-product').hidden=!v.canDelete;$('delete-product').disabled=!v.canPublish||Boolean(v.publishedAt&&!v.hidden);$('unpublish').hidden=!v.canUnpublish;$('unpublish').disabled=!v.canPublish||v.hidden;$('preview').href='/api/team/preview?slug='+encodeURIComponent(selectedSlug);$('preview-position').hidden=!v.collectionPreviewUrl;$('preview-position').href=v.collectionPreviewUrl||'#';$('publish').disabled=!v.canPublish;document.querySelectorAll('[data-product]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.product===selectedSlug)));$('publication').textContent=v.hidden?'已下架；保存后重新发布即可上架。':v.publishedAt?'最近发布：'+new Date(v.publishedAt).toLocaleString('zh-CN'):'尚未通过后台发布，官网仍使用原内容。';}
+async function loadProduct(slug=selectedSlug){const v=await api('product?slug='+encodeURIComponent(slug));selectedSlug=slug;$('product-select').value=slug;product=v.product;editorDefaults=v.editor||{};initialGallery=v.gallery||null;placementChoices=v.placements||[];fieldSpecs=v.fields||[];existingVideos=v.videos||[];revision=v.revision;dirty=false;draw();$('live-link').href=v.url;$('delete-product').hidden=!v.canDelete;$('delete-product').disabled=!v.canPublish||Boolean(v.publishedAt&&!v.hidden);$('unpublish').hidden=!v.canUnpublish;$('unpublish').disabled=!v.canPublish||v.hidden;$('preview').href='/api/team/preview?slug='+encodeURIComponent(selectedSlug);$('preview').textContent=editorDefaults.collection?'预览栏目页 ↗':'预览产品详情 ↗';$('preview-position').hidden=!v.collectionPreviewUrl;$('preview-position').href=v.collectionPreviewUrl||'#';$('publish').disabled=!v.canPublish;document.querySelectorAll('[data-product]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.product===selectedSlug)));$('publication').textContent=v.hidden?'已下架；保存后重新发布即可上架。':v.publishedAt?'最近发布：'+new Date(v.publishedAt).toLocaleString('zh-CN'):'尚未通过后台发布，官网仍使用原内容。';}
 $('editor').onsubmit=e=>{e.preventDefault();action(e.target,saveDraft);};
 $('preview').onclick=e=>{if(dirty){e.preventDefault();$('message').textContent='请先保存草稿，再打开预览。';}};
 $('preview-position').onclick=$('preview').onclick;
