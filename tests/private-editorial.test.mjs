@@ -52,3 +52,33 @@ test('Yunnan gallery closes before the caption and the standalone film',()=>{
  assert.match(html,/<\/a><\/div><\/div><div id="journey-overview"><\/div><section class="pt-film">/);
  assert.match(html,/<source src="https:\/\/example\.test\/yunnan\.mp4"/);
 });
+
+test('Sanjiangyuan uses only the standalone film from the editor',()=>{
+ const product={...catalog['nature-china'].product,videoUrl:'https://example.test/old.mp4',
+  privateEditorial:{videoTitle:'Qinghai destination film',videoUrl:'https://youtu.be/PeIbPep8ZVs'}};
+ const render=()=>renderContent(product,'https://example.test');
+ let html=render();
+ assert.doesNotMatch(html,/product-film-play|destination-video\.js|old\.mp4/);
+ assert.equal((html.match(/<iframe\b/g)||[]).length,1);
+ assert.match(html,/<div id="journey-overview"><\/div><section class="pt-film"><h2>Qinghai destination film<\/h2>/);
+ assert.match(html,/src="https:\/\/www\.youtube\.com\/embed\/PeIbPep8ZVs"/);
+ product.privateEditorial.videoUrl='';
+ html=render();
+ assert.doesNotMatch(html,/product-film-play|class="pt-film"|<iframe\b|<video\b/);
+ delete product.privateEditorial;
+ assert.doesNotMatch(render(),/product-film-play|class="pt-film"|<iframe\b|<video\b/);
+});
+
+test('cruise pages use their dedicated section for a configured link',()=>{
+ const product={...catalog['yangzi-explorer'].product};
+ const render=()=>renderContent(product,'https://example.test');
+ assert.doesNotMatch(render(),/data-film-title=|class="wrap section rail-film"/);
+ product.videoUrl='https://youtu.be/PeIbPep8ZVs';
+ const html=render();
+ const section=html.match(/<section class="wrap section rail-film">[\s\S]*?<\/section>/)?.[0]||'';
+ assert.match(section,/<iframe title="Product video" src="https:\/\/www\.youtube\.com\/embed\/PeIbPep8ZVs"/);
+ assert.equal((html.match(/<iframe\b/g)||[]).length,1);
+ assert.doesNotMatch(html,/data-film-title=|destination-video\.js/);
+ product.videoUrl='';
+ assert.doesNotMatch(render(),/data-film-title=|class="wrap section rail-film"|<iframe\b/);
+});

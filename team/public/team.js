@@ -152,6 +152,7 @@ function draw(){
   for(const [key,value]of Object.entries(product.values)){
    const spec=fieldSpecs.find(f=>f.key===key);
    if(editorDefaults.signature&&!spec)continue;
+   if(/^视频(?:标题|来源说明|来源网页|嵌入地址)$/.test(spec?.label))continue;
    if(spec?.type==='image'){if(!gallery)media[key]=value;continue;}
    if(gallery&&spec?.label==='图片 说明')continue;
    if(editorDefaults.planFields?.includes(key)||editorDefaults.dayKeys?.includes(key))continue;
@@ -160,7 +161,6 @@ function draw(){
    if(group!=='other')quick[group][key]=value;
   }
   groups.media.push(fields(media,['values']));if(!editorDefaults.rail&&!editorDefaults.privateEditorial)groups.media.push(fields({videoUrl:product.videoUrl??existingVideos[0]??''}));
-  if(product.filmCopy)groups.media.push(`<fieldset><legend>视频入口文案</legend>${fields(product.filmCopy,['filmCopy'])}</fieldset>`);
   if(!gallery)groups.media.push(fields({gallery:product.gallery||[]}));
   const quickBlocks=[];
   if(Object.keys(quick.nav).length)quickBlocks.push(`<fieldset><legend>快捷：导航文案</legend>${fields(quick.nav,['values'])}</fieldset>`);

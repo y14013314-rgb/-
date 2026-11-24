@@ -78,7 +78,7 @@ test('signature journeys support ten photos and omit the old tag and customizati
  const preview=await (await call('preview?slug='+slug)).text();assert.match(preview,/1 \/ 10/);assert.doesNotMatch(preview,/class="trip-tags"|Customize this journey|Legacy planning/);assert.match(preview,/Journey highlights[\s\S]*?pt-route[\s\S]*?pt-ending/);assert(preview.indexOf('pic-0.jpg')<preview.indexOf('pic-9.jpg'));
  assert.match(preview,/Explore my route/);assert.match(preview,/All trips/);
  product.signatureTag='';assert.doesNotMatch(renderContent(product,'https://site.test'),/class="trip-tags"/);
- const classic=structuredClone(catalog['classic-china'].product);classic.gallery=[product.gallery[0]];const legacy=renderContent(classic,'https://site.test');assert.match(legacy,/1 \/ 2/);assert.match(legacy,/<button class="product-film-play"/);assert.match(legacy,/<figcaption>Photo: <a/);
+ const classic=structuredClone(catalog['classic-china'].product);classic.gallery=[product.gallery[0]];const legacy=renderContent(classic,'https://site.test');assert.match(legacy,/1 \/ 2/);assert.doesNotMatch(legacy,/product-film-play/);assert.match(legacy,/<figcaption>Photo: <a/);
 });
 test('classics-pandas-cities opens with route photos and retains only the photos saved by the editor',async()=>{
  const {call}=await setup(),slug='classics-pandas-cities';const load=async()=>(await call('product?slug='+slug)).json();
@@ -111,33 +111,36 @@ test('video upload authorization enforces sessions, origin, configuration, rate 
 test('catalog videos preserve templates until saved and published, including pages without video',async()=>{
  const {call,env}=await setup(),url='https://ik.imagekit.io/negxem1l9/C0642.MP4';
  for(const slug of ['chengdu','classic-china','homepage']){
-  const p=structuredClone(catalog[slug].product),original=renderCatalogProduct(p,env.SITE_URL);p.videoUrl=url;validateCatalogProduct(p);
+  const p=structuredClone(catalog[slug].product),original=renderCatalogProduct(p,env.SITE_URL);
+  if(slug==='classic-china')p.privateEditorial={videoUrl:url};else p.videoUrl=url;
+  validateCatalogProduct(p);
   assert.equal((await call('save',{product:p,revision:0})).status,200);
   const preview=await (await call('preview?slug='+slug)).text();assert(preview.includes(url));assert(!original.includes(url));
   const rowBefore=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();assert.equal(rowBefore.published,null);
   assert.equal((await call('publish',{slug,revision:1})).status,200);
   const row=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();assert(renderCatalogProduct(JSON.parse(row.published),env.SITE_URL).includes(url));
   p.videoUrl='javascript:alert(1)';assert.throws(()=>validateCatalogProduct(p));
-  p.videoUrl='';validateCatalogProduct(p);assert(!renderCatalogProduct(p,env.SITE_URL).includes('<video'));
+  p.videoUrl='';if(p.privateEditorial)p.privateEditorial.videoUrl='';validateCatalogProduct(p);assert(!renderCatalogProduct(p,env.SITE_URL).includes('<video'));
  }
  const p=structuredClone(seed);p.film.src=url;validateProduct(p);assert(renderTrain(p,template,env.SITE_URL).detail.includes(url));
 });
-test('YouTube links replace the existing snow leopard film after saving and publishing',async()=>{
+test('configured wildlife videos play below the cover after saving and publishing',async()=>{
  const {call,env}=await setup(),slug='wildlife-sanjiangyuan-snow-leopard';
  const p=structuredClone(catalog[slug].product),id='M7lc1UVf-VE',frame='https://www.youtube.com/embed/'+id;
  for(const url of ['https://www.youtube.com/watch?v='+id,'https://youtu.be/'+id+'?si=share','https://www.youtube.com/shorts/'+id,frame])assert.equal(youtubeEmbedUrl(url),frame);
  for(const url of ['https://youtube.com.evil.test/watch?v='+id,'javascript:alert(1)','https://youtube.com/watch?v=bad'])assert.equal(youtubeEmbedUrl(url),'');
  p.videoUrl='https://www.youtube.com/watch?v='+id;
- const original=renderCatalogProduct(catalog[slug].product,env.SITE_URL),old=original.match(/data-film-src="([^"]+)"/)[1];
+ const original=renderCatalogProduct(catalog[slug].product,env.SITE_URL);
+ assert.doesNotMatch(original,/data-film-title=|class="pt-film"/);
  assert.equal((await call('save',{product:p,revision:0})).status,200);
  const preview=await (await call('preview?slug='+slug)).text();
- assert(preview.includes('data-film-frame="'+frame+'"'));assert(!preview.includes('data-film-src='));assert(!preview.includes(old));assert(!preview.includes('<video'));
+ assert(preview.includes('<iframe title="Product video" src="'+frame+'"'));assert.match(preview,/<\/figure><section class="pt-film">/);assert.doesNotMatch(preview,/data-film-title=|<video/);
  assert.equal((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published,null);
  assert.equal((await call('publish',{slug,revision:1})).status,200);
  const live=await onCatalogPage({env,request:new Request(env.SITE_URL+catalog[slug].path),next:async()=>new Response(original)},slug);
- assert((await live.text()).includes('data-film-frame="'+frame+'"'));
- p.videoUrl='https://example.test/new.mp4';const mp4=renderCatalogProduct(p,env.SITE_URL);assert(mp4.includes('data-film-src="'+p.videoUrl+'"'));assert(!mp4.includes(old));assert(!mp4.includes('<video'));
- p.videoUrl='';assert(!renderCatalogProduct(p,env.SITE_URL).includes('data-film-title='));
+ assert((await live.text()).includes('<iframe title="Product video" src="'+frame+'"'));
+ p.videoUrl='https://example.test/new.mp4';const mp4=renderCatalogProduct(p,env.SITE_URL);assert(mp4.includes('<source src="'+p.videoUrl+'"'));assert.doesNotMatch(mp4,/data-film-title=|<iframe/);
+ p.videoUrl='';assert.doesNotMatch(renderCatalogProduct(p,env.SITE_URL),/data-film-title=|class="pt-film"/);
  const home=structuredClone(catalog.homepage.product);home.videoUrl='https://youtu.be/'+id;assert(renderCatalogProduct(home,env.SITE_URL).includes('<iframe title="Product video" src="'+frame+'"'));
  const train=structuredClone(seed);train.film.src='https://youtu.be/'+id;assert(renderTrain(train,template,env.SITE_URL).detail.includes('<iframe title="Product video" src="'+frame+'"'));
 });
@@ -561,10 +564,10 @@ test('destination collection preview, published cards and sitemap follow destina
  await call('publish',{slug,revision:3});assert((await (await collection()).text()).includes('Tibet updated'));
 });
 
-test('destination films use the existing play button and reject unsafe links and quote days',()=>{
+test('destination films appear below the hero and reject unsafe links and quote days',()=>{
  const entry=catalog['destination-tibet'],p=structuredClone(entry.product),field=type=>entry.fields.find(f=>f.type===type);
  p.videoUrl='https://ik.imagekit.io/negxem1l9/new.mp4';p.values[field('days').key]='9';validateCatalogProduct(p);
- const html=renderCatalogProduct(p,'https://sukhatrip.com');assert(html.includes('data-film-src="'+p.videoUrl+'"'));assert(html.includes('data-quote-days="9"'));assert(!html.includes('<video'));
+ const html=renderCatalogProduct(p,'https://sukhatrip.com');assert.match(html,/<\/section><section class="pt-film">/);assert(html.includes('<source src="'+p.videoUrl+'"'));assert(html.includes('data-quote-days="9"'));assert.doesNotMatch(html,/data-film-title=/);
  p.values[field('url').key]='javascript:alert(1)';assert.throws(()=>validateCatalogProduct(p),/HTTPS/);
  p.values[field('url').key]='https://example.test/film';p.values[field('days').key]='0';assert.throws(()=>validateCatalogProduct(p),/天数/);
  const routes=JSON.parse(readFileSync(new URL('../pages-dist/_routes.json',import.meta.url),'utf8'));assert(routes.include.includes('/destinations/*'));
