@@ -18,6 +18,7 @@ for(const slug of ['baiyun','chengdu','jinxiu-dongfang','jinxiu-tianfu']){
   assert(html.indexOf('id="cruise-inquiry"')<html.indexOf('class="final-cta"'));
   assert.match(html,/Train: <strong id="cruise-ship">New &amp; scenic/);
   assert.match(html,/class="tour-photo-track"/);
+  assert.match(html,/\/tour-photos\.js\?v=manual-gallery-1/);
   assert.doesNotMatch(html,/section rail-film/);
   const custom={...copy,inquiryCopy:{...railInquiryCopy,heading:'Plan your rail escape',cabinExample:'e.g. A private cabin for two'}};
   const customHtml=renderContent(custom,origin);
