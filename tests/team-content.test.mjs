@@ -293,6 +293,19 @@ test('image upload permission, byte limits and public image response',async()=>{
  const p=structuredClone(seed);p.image.src=url;validateProduct(p);
 });
 
+test('image upload works past 400 images and stops at 800',async()=>{
+ const {env,sql,token}=await setup();
+ const bytes=readFileSync(new URL('../public/assets/trains/baiyun-salon.webp',import.meta.url));
+ const seedImages=(first,last)=>sql.prepare("WITH RECURSIVE numbers(n) AS (SELECT ? UNION ALL SELECT n+1 FROM numbers WHERE n<?) INSERT INTO media SELECT 'seed-'||n,X'00','editor',0 FROM numbers").run(first,last);
+ const send=()=>upload({env,request:new Request(env.SITE_URL+'/api/team/upload',{method:'POST',headers:{Origin:env.SITE_URL,'Content-Type':'image/webp',Cookie:cookieName+'='+token},body:bytes})});
+ seedImages(1,400);
+ assert.equal((await send()).status,200);
+ seedImages(401,798);
+ assert.equal((await send()).status,200);
+ assert.equal((await send()).status,409);
+ assert.equal(sql.prepare('SELECT count(*) AS total FROM media').get().total,800);
+});
+
 test('catalog products and homepage keep drafts separate and render escaped updates',async()=>{
  const {call}=await setup();assert.equal(Object.keys(catalog).length,35+signatures.length);
  for(const [slug,e] of Object.entries(catalog)){
