@@ -14,19 +14,4 @@ for(const gallery of document.querySelectorAll('.tour-photos')){
  track.onpointerup=event=>{if(!drag)return;const delta=drag.start-event.clientX,target=drag.index+(Math.abs(delta)>=Math.min(50,track.clientWidth*.15)?Math.sign(delta):0);drag=null;track.classList.remove('dragging');show(target);};
  track.onlostpointercapture=()=>{if(drag){const target=drag.index;drag=null;track.classList.remove('dragging');show(target);}};
  track.addEventListener('scroll',update,{passive:true});window.addEventListener('resize',update);nav.hidden=false;update();
- if(gallery.closest('.rail-photos,.pt-banner')){
-  const toggle=document.createElement('button');
-  toggle.type='button';
-  let playing=!matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const label=()=>{toggle.textContent=playing?'Ⅱ':'▶';toggle.setAttribute('aria-label',playing?'Pause slideshow':'Play slideshow');};
-  const pause=()=>{playing=false;label();};
-  toggle.onclick=()=>{playing=!playing;label();};
-  track.addEventListener('pointerdown',pause);
-  track.addEventListener('focus',pause);
-  nav.addEventListener('click',event=>{if(event.target!==toggle)pause();});
-  nav.append(toggle);label();
-  let visible=false;
-  new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;}).observe(gallery);
-  setInterval(()=>{if(playing&&visible&&!document.hidden)show((index()+1)%count);},5000);
- }
 }

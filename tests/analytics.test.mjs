@@ -31,7 +31,7 @@ test('withdrawal disables analytics, removes only GA cookies and reloads; previe
 test('declined historical leads are not emitted when consent is granted later; injection stays single',()=>{
  const ui=setup(),v={saved:true,reference:'INQ-12345678-1234-1234-1234-123456789ABC'};ui.context.window.SukhaAnalytics.lead(v);ui.buttons[0].onclick();ui.context.window.SukhaAnalytics.lead(v);assert.equal(ui.events().filter(x=>x[1]==='generate_lead').length,0);
  const html='<head></head><body></body>';assert.equal(withAnalytics(withAnalytics(html)).split('src="/analytics.js?v=ga4-20261113"').length-1,1);
- const upgraded=withAnalytics('<head><script src="/home-v1.js"></script><script src="/pages-inquiry.js"></script></head>');assert(upgraded.includes('/home-v1.js?v=inquiry-confirm-1'));assert(upgraded.includes('/pages-inquiry.js?v=inquiry-layout-1'));
+ const upgraded=withAnalytics('<head><script src="/home-v1.js"></script><script src="/pages-inquiry.js"></script></head>');assert(upgraded.includes('/home-v1.js?v=manual-gallery-1'));assert(upgraded.includes('/pages-inquiry.js?v=inquiry-layout-1'));
  const reinjected=withAnalytics(upgraded);assert.equal(reinjected,upgraded);
 });
 

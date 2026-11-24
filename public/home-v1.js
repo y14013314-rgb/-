@@ -1,27 +1,19 @@
 'use strict';
 (()=>{
  if(!document.body.classList.contains('home-v1'))return;
- const hero=document.querySelector('.home-hero'),slides=[...hero.querySelectorAll('[data-slide]')],dots=[...hero.querySelectorAll('[data-slide-to]')],pause=hero.querySelector('[data-slide-pause]');
- const motion=matchMedia('(prefers-reduced-motion: reduce)');let index=0,paused=motion.matches,timer,revision=0;
- const updatePause=()=>{pause.textContent=paused?'▶':'Ⅱ';pause.setAttribute('aria-label',paused?'Play slideshow':'Pause slideshow');};
- const stop=()=>{paused=true;clearTimeout(timer);updatePause();};
- const schedule=()=>{clearTimeout(timer);if(!paused&&!document.hidden)timer=setTimeout(()=>show((index+1)%slides.length),7000);};
- async function show(next,announce=false){
+ const hero=document.querySelector('.home-hero'),slides=[...hero.querySelectorAll('[data-slide]')],dots=[...hero.querySelectorAll('[data-slide-to]')];
+ let index=0,revision=0;
+ async function show(position){
+  const next=(position+slides.length)%slides.length;
   const turn=++revision,img=slides[next].querySelector('img');
   if(img.dataset.src){img.srcset=img.dataset.srcset;img.src=img.dataset.src;delete img.dataset.src;try{await img.decode();}catch{}}
   if(turn!==revision)return;
   index=next;slides.forEach((slide,i)=>{slide.classList.toggle('is-active',i===index);slide.setAttribute('aria-hidden',String(i!==index));slide.inert=i!==index;dots[i].setAttribute('aria-pressed',String(i===index));});
-  if(announce)document.querySelector('#home-slide-status').textContent=`Slide ${index+1} of ${slides.length}`;
-  schedule();
+  document.querySelector('#home-slide-status').textContent=`Slide ${index+1} of ${slides.length}`;
  }
- const manual=next=>{stop();show((next+slides.length)%slides.length,true);};
- hero.querySelector('[data-slide-prev]').addEventListener('click',()=>manual(index-1));hero.querySelector('[data-slide-next]').addEventListener('click',()=>manual(index+1));
- dots.forEach((dot,i)=>dot.addEventListener('click',()=>manual(i)));
- pause.addEventListener('click',()=>{paused=!paused;updatePause();schedule();});
- hero.addEventListener('pointerenter',()=>clearTimeout(timer));hero.addEventListener('pointerleave',schedule);
- hero.addEventListener('focusin',event=>{if(event.target!==pause)stop();});hero.addEventListener('pointerdown',event=>{if(!pause.contains(event.target))stop();});
- hero.addEventListener('keydown',event=>{if(event.target.closest('.site-search'))return;if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();manual(index+(event.key==='ArrowRight'?1:-1));}});
- motion.addEventListener('change',event=>{if(event.matches)stop();});document.addEventListener('visibilitychange',schedule);updatePause();schedule();
+ hero.querySelector('[data-slide-prev]').addEventListener('click',()=>show(index-1));hero.querySelector('[data-slide-next]').addEventListener('click',()=>show(index+1));
+ dots.forEach((dot,i)=>dot.addEventListener('click',()=>show(i)));
+ hero.addEventListener('keydown',event=>{if(event.target.closest('.site-search'))return;if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();show(index+(event.key==='ArrowRight'?1:-1));}});
  const form=document.querySelector('#home-quick-inquiry'),review=document.querySelector('#home-inquiry-review'),summary=document.querySelector('#home-request-text');
  document.querySelector('.home-inquiry-note').textContent='Submit your inquiry here. Our travel team will reply by email.';
  form.querySelector('[type="submit"]').textContent='Review my inquiry';
