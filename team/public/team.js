@@ -34,7 +34,7 @@ async function showUser(user){
  if(user.role==='admin'){$('members').hidden=false;await loadMembers();}else{$('members').hidden=true;}
 }
 async function action(form,fn){const wasInert=Boolean(form.inert);form.inert=true;$('message').textContent='正在处理…';try{await fn();}catch(e){$('message').textContent=e.message;}finally{form.inert=wasInert;}}
-$('send').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{const v=await api('request-code',{email:$('email').value});challenge=v.challenge;$('send').hidden=true;$('verify').hidden=false;$('message').textContent='验证码邮件已提交发送，请检查收件箱和垃圾邮件。10 分钟内有效。';$('code').focus();});};
+$('send').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{const v=await api('request-code',{email:$('email').value});challenge=v.challenge;$('send').hidden=true;$('verify').hidden=false;$('message').textContent='如果该邮箱已获授权，请到收件箱或垃圾邮件中查看验证码。验证码 10 分钟内有效。';$('code').focus();});};
 $('verify').onsubmit=e=>{e.preventDefault();action(e.target,async()=>showUser(await api('verify',{challenge,code:$('code').value})));};
 $('back').onclick=()=>{challenge=null;$('code').value='';$('verify').hidden=true;$('send').hidden=false;$('message').textContent='';};
 $('logout').onclick=()=>action($('workspace'),async()=>{await api('logout',{});location.reload();});
@@ -47,6 +47,10 @@ const labels={sections:'补充行程与内容',gallery:'附加图片（可新增
 const categoryNames={home:'首页',journeys:'私人行程','silk-road-luxury-trains':'列车','yangtze-river-cruises':'游轮',destinations:'目的地','signature-experiences':'主题体验',experiences:'城市体验',wildlife:'野生动物'};
 categoryNames.collection='栏目页';
 Object.assign(labels,{pageCopy:'页面文字',backLabel:'详情页顶部「返回栏目」文字',breadcrumbTitle:'详情页顶部显示名称（留空跟随产品名称）',introPhoto:'介绍配图（可选）',cardCopy:'栏目卡片',eyebrow:'小标题 / 中文标签',duration:'展示天数与年份',button:'按钮文字',photo:'配图',itinerary:'行程段',ownItinerary:'使用此版本自己的行程',days:'天数',voyages:'游轮航线',priceNote:'卡片价格文案'});
+Object.assign(labels,{stops:'途经地点',shoreTitle:'岸上体验标题',shoreNote:'岸上体验补充说明',visible:'在官网显示此板块',extra:'添加到本板块的内容（可留空）'});
+Object.assign(labels,{durationLabel:'天数标签（{days} 自动显示实际天数）',themeLabel:'主题标签',styleLabel:'旅行方式标签'});
+Object.assign(labels,{buttonText:'按钮文字（同步用于无障碍标签）',caption:'入口小字',dialogTitle:'视频弹窗标题',filmCredit:'视频说明'});
+Object.assign(labels,{heading:'表单标题',productLabel:'产品名称前缀',departureLabel:'出发日期字段名称',cabinLabel:'包厢偏好字段名称',cabinExample:'包厢偏好示例',extensionLabel:'延长行程字段名称',extensionExample:'延长行程示例',adultsLabel:'成人字段名称',childrenLabel:'儿童字段名称',agesLabel:'儿童年龄字段名称',agesExample:'儿童年龄示例',contactHeading:'联系方式标题',nameLabel:'姓名字段名称',emailLabel:'邮箱字段名称',consent:'隐私同意文字',button:'提交前按钮文字',note:'表单说明'});
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function youtubeEmbedUrl(value){
  let url;try{url=new URL(value);}catch{return '';}
@@ -62,6 +66,8 @@ function videoPreview(value){
 function primaryImageFieldKey(){return fieldSpecs.find(f=>f.type==='image')?.key||'';}
 function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slug','templateSlug','featured','sourceIndex'].includes(k)).map(([k,v])=>{
  const p=[...path,k],key=esc(JSON.stringify(p)),label=(path[0]==='pageCopy'?editorDefaults.pageFields?.find(f=>f.key===k)?.label:fieldSpecs.find(f=>f.key===k)?.label)||labels[k]||k;
+ if(path[0]==='privateEditorial'&&k!=='videoUrl'){const names={route:'路线站点（每行一站）',routeNote:'路线备注',routeLabel:'路线小标题',days:'每日行程（Day 1 · 标题，下一行填写正文）',dayTitle:'每日行程标题',dayLabel:'每日行程小标题',ctaLabel:'页底小标题',ctaTitle:'页底主标题',ctaBody:'页底说明',ctaButton:'规划按钮',videoTitle:'视频栏目标题'};return `<label>${names[k]}<textarea data-path="${key}" rows="${k==='days'?10:2}">${esc(v)}</textarea></label>`;}
+ if(k==='heroBack'||k==='heroButton')return `<label>${k==='heroBack'?'首屏返回链接文字':'首屏按钮文字'}<input maxlength="250" data-path="${key}" value="${esc(v)}"></label>`;
  if(k==='placement')return `<label>发布位置<select data-path="${key}">${placementChoices.map(o=>`<option value="${esc(o.value)}" ${v===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select><small>保存草稿并发布后，会移到所选栏目。产品详情网址保持不变。</small></label>`;
  if(typeof v==='boolean')return `<label class="check-label"><input type="checkbox" data-path="${key}" data-type="boolean" ${k==='ownItinerary'?'data-redraw':''} ${v?'checked':''}> ${esc(label)}</label>`;
  if(Array.isArray(v)){
@@ -71,18 +77,25 @@ function fields(value,path=[]){return Object.entries(value).filter(([k])=>!['slu
  if(v&&typeof v==='object')return `<fieldset><legend>${esc(label)}</legend>${fields(v,p)}</fieldset>`;
  if(k==='status'&&path[0]==='price')return `<label>${esc(label)}<select data-path="${key}"><option value="on-request" ${v==='on-request'?'selected':''}>询价 · Price on request</option><option value="from" ${v==='from'?'selected':''}>每人起价 · From</option></select></label>`;
  const optionalImage=(k==='src'&&(path[0]==='introPhoto'||path[0]==='plan'))||(path[0]==='cardCopy'&&k==='photo');
- const isImage=optionalImage||(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||(path[0]==='gallery'&&k==='src')||fieldSpecs.find(f=>f.key===k)?.type==='image';
+ const isImage=optionalImage||(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||(['gallery','railPhotos'].includes(path[0])&&k==='src')||fieldSpecs.find(f=>f.key===k)?.type==='image';
  if(isImage)return `<article class="media-card"><div class="media-frame"><img ${v?`src="${esc(v)}"`:'hidden'} alt="${esc(label)}" loading="lazy"></div><div class="media-copy"><strong>${esc(label)}</strong><label class="upload-button">选择或更换图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label>${optionalImage&&v?` <button type="button" data-clear-image="${key}">${path[0]==='cardCopy'?'恢复默认图':'移除配图'}</button>`:''}<small>支持 JPG、PNG、WebP，自动压缩</small><details><summary>使用已有图片链接</summary><textarea aria-label="${esc(label)}链接" data-image-link data-path="${key}">${esc(v)}</textarea></details></div></article>`;
  if((path[0]==='film'&&k==='src')||k==='videoUrl')return `<article class="media-card"><div data-video-preview>${videoPreview(v)}</div><div class="media-copy"><strong>产品视频</strong><p>可上传 99 MB 以内的 MP4，或粘贴 YouTube 视频链接。修改后请保存草稿、预览并发布。</p><label class="upload-button">选择或更换视频<input type="file" accept="video/mp4,.mp4" data-video-upload="${key}"></label><details><summary>修改视频链接</summary><textarea aria-label="视频链接" data-video-link data-path="${key}">${esc(v)}</textarea></details></div></article>`;
  return `<label>${esc(label)}${typeof v==='number'?`<input type="number" step="any" data-path="${key}" data-type="number" value="${esc(v)}">`:`<textarea data-path="${key}" rows="${['description','planningNote','accessNote'].includes(k)?4:2}">${esc(v)}</textarea>`}</label>${(path[0]==='image'&&k==='src')||(path[0]==='film'&&k==='poster')||(path[0]==='gallery'&&k==='src')||fieldSpecs.find(f=>f.key===k)?.type==='image'?`<label>从电脑上传图片<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${key}"></label>`:''}`;
  }).join('');}
 function at(path){
+ if(path[0]==='privateEditorial')product.privateEditorial??={};
  if(path[0]==='gallery'&&initialGallery&&!product.galleryUnified){product.gallery=initialGallery.map(item=>({...item}));product.galleryUnified=true;}
- if(['cardCopy','pageCopy','introPhoto','plan'].includes(path[0])&&!product[path[0]])product[path[0]]=path[0]==='plan'?structuredClone(editorDefaults.plan):path[0]==='introPhoto'?blankPhoto():{};
+ if(path[0]==='plan'&&editorDefaults.plan?.voyages&&(!product.plan?.blocks||!product.plan?.shore))product.plan=structuredClone(currentPlan());
+ if(['cardCopy','pageCopy','introPhoto','plan','inquiryCopy'].includes(path[0])&&!product[path[0]])product[path[0]]=path[0]==='plan'?structuredClone(editorDefaults.plan):path[0]==='introPhoto'?blankPhoto():path[0]==='inquiryCopy'?structuredClone(editorDefaults.inquiryCopy):{};
  return path.reduce((x,k)=>x[k],product);
 }
 const blankPhoto=()=>({src:'',alt:'',credit:''});
+function currentPlan(){
+ const defaults=editorDefaults.plan,saved=product.plan;if(!defaults?.voyages||!saved)return saved||defaults;
+ return {...defaults,...saved,blocks:{...defaults.blocks,...saved.blocks},voyages:saved.voyages.map((item,index)=>item.id?item:{...defaults.voyages[index],...item})};
+}
 const blankDay=()=>({title:'',description:'',photo:blankPhoto()});
+const blankVoyage=()=>({id:crypto.randomUUID(),title:'',duration:'',stops:'',description:'',button:'Choose this voyage ↗',itinerary:[]});
 const blankEdition=()=>({...blankDay(),ownItinerary:false,days:'',route:'',itinerary:[]});
 function planList(items,path,caption,render){
  const key=esc(JSON.stringify(path));
@@ -93,11 +106,15 @@ function planList(items,path,caption,render){
 }
 function planEditor(plan){
  const days=(items,path)=>planList(items,path,'行程段',fields);
- if(plan.voyages)return plan.voyages.map((voyage,index)=>`<fieldset><legend>${esc(voyage.title)}</legend>${days(voyage.itinerary,['plan','voyages',index,'itinerary'])}</fieldset>`).join('');
+ if(plan.voyages){
+  const blocks={gallery:'船舶图库',film:'视频',intro:'船舶介绍',voyages:'选择航线',inquiry:'询价表单',shore:'岸上体验',fares:'价格与预订说明',cta:'页末咨询入口'};
+  return '<p>可增删或排序整张航线卡。询价表使用当前卡片，不会引用已删除的航线。关闭板块可从页面移除，重新勾选即可恢复。</p>'+planList(plan.voyages,['plan','voyages'],'航线卡片',(item,path)=>fields({title:item.title,duration:item.duration,stops:item.stops,description:item.description,button:item.button},path)+days(item.itinerary,[...path,'itinerary']))+fields({shoreTitle:plan.shoreTitle,shoreNote:plan.shoreNote},['plan'])+planList(plan.shore,['plan','shore'],'岸上体验',fields)+Object.entries(blocks).map(([key,label])=>`<fieldset><legend>${label}</legend>${fields(plan.blocks[key],['plan','blocks',key])}</fieldset>`).join('');
+ }
  return `<p>每段可填写一天或一个日期范围，增删不会自动修改产品总天数。未设置独立行程的版本沿用下方的共用行程。</p>`+planList(plan.editions,['plan','editions'],'路线版本',(edition,path)=>fields({title:edition.title,description:edition.description,photo:edition.photo,ownItinerary:edition.ownItinerary},path)+(edition.ownItinerary?fields({days:edition.days,route:edition.route},path)+days(edition.itinerary,[...path,'itinerary']):''))+days(plan.itinerary,['plan','itinerary']);
 }
 function galleryFields(items){
- return `<section class="gallery-editor"><h3>产品图片 · ${items.length} 张</h3><button type="button" data-gallery-add ${items.length>=50?'disabled':''}>＋ 添加图片</button><div class="gallery-items">${items.map((item,index)=>`<fieldset><legend>第 ${index+1} 张${index===0?' · 封面':''}</legend><div class="gallery-actions"><button type="button" data-gallery-move="${index}" data-direction="-1" ${index===0?'disabled':''} aria-label="上移第 ${index+1} 张图片">上移</button><button type="button" data-gallery-move="${index}" data-direction="1" ${index===items.length-1?'disabled':''} aria-label="下移第 ${index+1} 张图片">下移</button><button type="button" data-gallery-remove="${index}" ${items.length===1?'disabled':''} aria-label="删除第 ${index+1} 张图片">删除图片</button></div>${fields(item,['gallery',index])}</fieldset>`).join('')}</div></section>`;
+ const limit=editorDefaults.galleryLimit||50;
+ return `<section class="gallery-editor"><h3>产品图片 · ${items.length} / ${limit} 张</h3><button type="button" data-gallery-add ${items.length>=limit?'disabled':''}>＋ 添加图片</button><div class="gallery-items">${items.map((item,index)=>`<fieldset><legend>第 ${index+1} 张${index===0?' · 封面':''}</legend><div class="gallery-actions"><button type="button" data-gallery-move="${index}" data-direction="-1" ${index===0?'disabled':''} aria-label="上移第 ${index+1} 张图片">上移</button><button type="button" data-gallery-move="${index}" data-direction="1" ${index===items.length-1?'disabled':''} aria-label="下移第 ${index+1} 张图片">下移</button><button type="button" data-gallery-remove="${index}" ${items.length===1?'disabled':''} aria-label="删除第 ${index+1} 张图片">删除图片</button></div>${fields(item,['gallery',index])}</fieldset>`).join('')}</div></section>`;
 }
 function classifyCopyField(spec){
  const text=(spec?.label||'').toLowerCase();
@@ -112,21 +129,38 @@ function draw(){
  const groups={basic:[],card:[],media:[],plan:[],content:[],price:[]};
  const gallery=product.galleryUnified?product.gallery:initialGallery;
  if(gallery)groups.media.push(galleryFields(gallery));
+ if(editorDefaults.rail){
+  const photos=product.railMedia==='gallery';
+  const mode=`<label>展示方式<select data-path="[&quot;railMedia&quot;]" data-redraw><option value="video" ${photos?'':'selected'}>视频</option><option value="gallery" ${photos?'selected':''}>轮播图集</option></select></label>`;
+  const editor=photos?planList(product.railPhotos||[],['railPhotos'],'宣传图片',fields):product.film?fields({film:product.film}):fields({videoUrl:product.videoUrl??existingVideos[0]??''});
+  groups.media.push(`<fieldset><legend>列车宣传视频或图集</legend>${mode}${editor}</fieldset>`);
+  groups.content.push(`<fieldset><legend>询价表单文案</legend><p>可修改表单标题、字段名称和示例文字。产品名称会自动使用本页的列车名称。</p>${fields(product.inquiryCopy??editorDefaults.inquiryCopy,['inquiryCopy'])}</fieldset>`);
+ }
  if(editorDefaults.collection){
   groups.content.push(fields({backLabel:product.backLabel}));
  }else if(product.values){
   groups.basic.push(fields(placementChoices.length?{title:product.title,placement:product.placement}:{title:product.title}));
+  if(product.journey){const {itinerary,...overview}=product.journey;groups.plan.push('<p>这些内容直接显示在原页面的顶部标签、路线站点和每日折叠列表。一天一项，增删后自动更新天数；已识别的 DAY 行程无需重填。</p>'+fields(overview,['journey'])+planList(itinerary,['journey','itinerary'],'每日行程',fields));}
+  if(editorDefaults.journeyHero)groups.basic.push(fields({heroBack:product.heroBack??'← All signature journeys',heroButton:product.heroButton??'Explore this journey ↓'}));
+  if(editorDefaults.privateEditorial){
+   const {route,routeLabel,routeNote,days,dayTitle,dayLabel,videoTitle,videoUrl,...ending}={...editorDefaults.privateEditorial,...product.privateEditorial};
+   if(editorDefaults.signature)groups.plan.push(fields({route,routeLabel,routeNote,days,dayTitle,dayLabel},['privateEditorial']));
+   groups.media.push('<fieldset><legend>独立视频栏目</legend>'+fields({videoTitle,videoUrl},['privateEditorial'])+'</fieldset>');
+   groups.content.push('<fieldset><legend>页底规划邀请</legend>'+fields(ending,['privateEditorial'])+'</fieldset>');
+  }
   const media={},text={},quick={nav:{},footer:{},cta:{}};
   for(const [key,value]of Object.entries(product.values)){
    const spec=fieldSpecs.find(f=>f.key===key);
+   if(editorDefaults.signature&&!spec)continue;
    if(spec?.type==='image'){if(!gallery)media[key]=value;continue;}
    if(gallery&&spec?.label==='图片 说明')continue;
-   if(editorDefaults.planFields?.includes(key))continue;
+   if(editorDefaults.planFields?.includes(key)||editorDefaults.dayKeys?.includes(key))continue;
    text[key]=value;
    const group=classifyCopyField(spec);
    if(group!=='other')quick[group][key]=value;
   }
-  groups.media.push(fields(media,['values']));groups.media.push(fields({videoUrl:product.videoUrl??existingVideos[0]??''}));
+  groups.media.push(fields(media,['values']));if(!editorDefaults.rail&&!editorDefaults.privateEditorial)groups.media.push(fields({videoUrl:product.videoUrl??existingVideos[0]??''}));
+  if(product.filmCopy)groups.media.push(`<fieldset><legend>视频入口文案</legend>${fields(product.filmCopy,['filmCopy'])}</fieldset>`);
   if(!gallery)groups.media.push(fields({gallery:product.gallery||[]}));
   const quickBlocks=[];
   if(Object.keys(quick.nav).length)quickBlocks.push(`<fieldset><legend>快捷：导航文案</legend>${fields(quick.nav,['values'])}</fieldset>`);
@@ -138,18 +172,18 @@ function draw(){
    groups.content.push(`<div data-copy-quick ${all?'hidden':''}>${quickBlocks.join('')||'<p>当前页面没有可识别的快捷文案分组。</p>'}</div>`);
    groups.content.push(`<div data-copy-all ${all?'':'hidden'}><fieldset><legend>完整：页面文字</legend>${fields(text,['values'])}</fieldset></div>`);
   }
-  groups.content.push(fields({sections:product.sections||[]}));
+  groups.content.push((product.journey?'<p>这里仅用于页末补充说明；修改原页面的每日安排，请打开「路线与每日行程」。</p>':'')+fields({sections:product.sections||[]}));
  }else{
-  for(const [key,value]of Object.entries(product)){if(['slug','templateSlug','featured','gallery','galleryUnified','cardCopy','pageCopy','breadcrumbTitle','plan','introPhoto'].includes(key)||(editorDefaults.rail&&['editions','itinerary'].includes(key))||(gallery&&key==='image'))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
+  for(const [key,value]of Object.entries(product)){if(['slug','templateSlug','featured','gallery','galleryUnified','cardCopy','pageCopy','breadcrumbTitle','plan','introPhoto'].includes(key)||(editorDefaults.rail&&['editions','itinerary','price','film','railMedia','railPhotos','inquiryCopy'].includes(key))||(gallery&&key==='image'))continue;const group=['image','film'].includes(key)?'media':key==='price'?'price':['title','localTitle','description','year','days','route','placement'].includes(key)?'basic':'content';groups[group].push(fields({[key]:value}));}
  }
  if(editorDefaults.plan){
   groups.basic.push(fields({breadcrumbTitle:product.breadcrumbTitle??editorDefaults.breadcrumbTitle??''}));
-  groups.plan.push(planEditor(product.plan||editorDefaults.plan));
+  groups.plan.push(planEditor(currentPlan()));
   groups.content.unshift(fields({introPhoto:product.introPhoto||blankPhoto()}));
  }
  if(editorDefaults.card)groups.card.push('<p>这里只修改栏目列表。未单独选图时沿用当前默认图；更换不会影响详情图库。</p>'+fields({...editorDefaults.card,...product.cardCopy,photo:product.cardCopy?.photo||editorDefaults.card.photo},['cardCopy']));
  if(editorDefaults.pageFields?.length)groups.content.push('<fieldset><legend>页面标题、按钮与其他文字</legend>'+fields(Object.fromEntries(editorDefaults.pageFields.map(field=>[field.key,product.pageCopy?.[field.key]??field.value])),['pageCopy'])+'</fieldset>');
- const names={basic:'基本信息',card:'栏目卡片',media:'图片与视频',plan:'独立行程',content:editorDefaults.collection?'栏目文字':'行程与文字',price:'价格'};
+ const names={basic:'基本信息',card:'栏目卡片',media:'图片与视频',plan:product.journey?'路线与每日行程':editorDefaults.plan?.voyages?'航线与板块':'独立行程',content:editorDefaults.collection?'栏目文字':'行程与文字',price:'价格'};
  const available=Object.keys(groups).filter(k=>groups[k].join('').length);if(!available.includes(activeTab))activeTab=available[0];
  $('editor-tabs').innerHTML=available.map(k=>`<button type="button" data-tab="${k}" aria-pressed="${k===activeTab}">${names[k]}</button>`).join('');
  $('fields').innerHTML=available.map(k=>`<section class="editor-panel" data-panel="${k}" ${k===activeTab?'':'hidden'}>${k==='content'&&editorDefaults.pageFields?.length?'<label class="editor-search">查找文案<input type="search" data-copy-search placeholder="输入页面文字"></label>':''}${groups[k].join('')}</section>`).join('');
@@ -161,10 +195,10 @@ function draw(){
  $('fields').querySelectorAll('[data-upload]').forEach(input=>input.onchange=()=>uploadImage(input));
  $('fields').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{if(!confirm('删除这条内容？保存并发布后才影响官网。'))return;const p=JSON.parse(b.dataset.remove),i=p.pop();at(p).splice(i,1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{const p=JSON.parse(button.dataset.move),i=p.pop(),arr=at(p),target=button.dataset.dir==='up'?i-1:i+1;if(!Array.isArray(arr)||target<0||target>=arr.length)return;[arr[i],arr[target]]=[arr[target],arr[i]];dirty=true;draw();});
- $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const path=JSON.parse(b.dataset.add),key=path.at(-1);let items=at(path);if(!Array.isArray(items))items=at(path.slice(0,-1))[key]=[];items.push(path[0]==='plan'?(key==='editions'?blankEdition():blankDay()):key==='gallery'?blankPhoto():{title:'',description:''});dirty=true;draw();});
+ $('fields').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const path=JSON.parse(b.dataset.add),key=path.at(-1);let items=at(path);if(!Array.isArray(items))items=at(path.slice(0,-1))[key]=[];items.push(key==='voyages'?blankVoyage():key==='shore'?{title:'',description:''}:path[0]==='plan'?(key==='editions'?blankEdition():blankDay()):['gallery','railPhotos'].includes(key)?blankPhoto():{title:'',description:''});dirty=true;draw();});
  $('fields').querySelectorAll('[data-set-cover]').forEach(button=>button.onclick=()=>{const p=JSON.parse(button.dataset.setCover),i=p.pop(),arr=at(p),item=Array.isArray(arr)?arr[i]:null,key=primaryImageFieldKey();if(!item?.src||!key||!product.values)return;product.values[key]=item.src;dirty=true;$('message').textContent='已设为封面图，请保存草稿并发布。';draw();});
  $('fields').querySelectorAll('[data-copy-view]').forEach(button=>button.onclick=()=>{copyView=button.dataset.copyView;copyViewChosen=true;try{localStorage.setItem('teamCopyView',copyView);}catch{}draw();});
- $('fields').querySelectorAll('[data-gallery-add]').forEach(button=>button.onclick=()=>{const items=at(['gallery']);if(items.length>=50)return;items.push({src:'',alt:'',credit:''});dirty=true;draw();$('fields').querySelector('.gallery-items > fieldset:last-child')?.scrollIntoView({block:'center'});});
+ $('fields').querySelectorAll('[data-gallery-add]').forEach(button=>button.onclick=()=>{const items=at(['gallery']);if(items.length>=(editorDefaults.galleryLimit||50))return;items.push({src:'',alt:'',credit:''});dirty=true;draw();$('fields').querySelector('.gallery-items > fieldset:last-child')?.scrollIntoView({block:'center'});});
  $('fields').querySelectorAll('[data-gallery-remove]').forEach(button=>button.onclick=()=>{if(gallery.length<=1||!confirm('删除这张产品图片？保存并发布后才影响官网。'))return;at(['gallery']).splice(Number(button.dataset.galleryRemove),1);dirty=true;draw();});
  $('fields').querySelectorAll('[data-gallery-move]').forEach(button=>button.onclick=()=>{const items=at(['gallery']),index=Number(button.dataset.galleryMove),target=index+Number(button.dataset.direction);if(target<0||target>=items.length)return;[items[index],items[target]]=[items[target],items[index]];dirty=true;draw();});
 }
@@ -177,7 +211,7 @@ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.return
 
 async function loadMembers(){const v=await api('members');$('member-list').innerHTML=v.members.map(m=>`<p>${esc(m.email)} · ${m.active?'已授权':'已停用'} <button type="button" data-member="${esc(m.email)}" data-active="${m.active?'0':'1'}">${m.active?'停用':'恢复'}</button></p>`).join('')||'<p>尚未添加同事。</p>';$('member-list').querySelectorAll('[data-member]').forEach(b=>b.onclick=()=>{if(!confirm(b.dataset.active==='0'?'停用后该同事将无法继续访问后台，确定？':'恢复该同事的编辑权限？'))return;action($('members'),async()=>{await api('members',{email:b.dataset.member,active:b.dataset.active==='1'});await loadMembers();$('message').textContent='成员权限已更新。';});});}
 $('member-form').onsubmit=e=>{e.preventDefault();action(e.target,async()=>{await api('members',{email:$('member-email').value,active:true});$('member-email').value='';await loadMembers();$('message').textContent='已授权。同事可使用自己的邮箱验证码登录；可以编辑、预览并自行发布。';});};
-async function loadProducts(){const v=await api('products');$('create-template').innerHTML=v.templates.map(t=>`<option value="${esc(t.slug)}">${esc({'journeys':'私人行程','silk-road-luxury-trains':'列车','yangtze-river-cruises':'游轮'}[t.category]||'产品')} · ${esc(t.label)}</option>`).join('');$('product-select').innerHTML=v.products.map(p=>`<option value="${esc(p.slug)}">${esc(categoryNames[p.category]||'产品')} · ${esc(p.localName?p.localName+' · ':'')}${esc(p.label)}</option>`).join('');$('product-select').value=selectedSlug;
+async function loadProducts(){const v=await api('products');const option=p=>`<option value="${esc(p.slug)}">${esc(categoryNames[p.category]||'产品')} · ${esc(p.localName?p.localName+' · ':'')}${esc(p.label)}</option>`;$('create-template').innerHTML=v.templates.map(option).join('');$('product-select').innerHTML=v.products.map(option).join('');$('product-select').value=selectedSlug;
  $('product-cards').innerHTML=v.products.map(p=>`<button type="button" class="product-card" data-product="${esc(p.slug)}" aria-pressed="${p.slug===selectedSlug}"><img src="${esc(p.image||'')}" alt="" loading="lazy"><span><strong>${esc(p.localName?p.localName+' · ':'')}${esc(p.label)}</strong><small>${esc(categoryNames[p.category]||'产品')} · ${p.hidden?'已下架':p.publishedAt?'已发布':p.isNew?'草稿 · 未上架':'现有官网页面'}</small></span></button>`).join('');
  $('product-cards').querySelectorAll('[data-product]').forEach(b=>b.onclick=()=>{$('product-select').value=b.dataset.product;$('product-select').onchange();});$('product-search').oninput();}
 $('product-select').onchange=()=>{const value=$('product-select').value;if(dirty&&!confirm('当前修改未保存，确定切换并放弃修改？')){$('product-select').value=selectedSlug;return;}$('product-select').disabled=true;action($('workspace'),async()=>{try{await loadProduct(value);$('message').textContent='已载入产品。';}catch(e){$('product-select').value=selectedSlug;throw e;}finally{$('product-select').disabled=false;}});};
@@ -191,17 +225,12 @@ api('me').then(showUser).catch(()=>{});
 
 async function uploadImage(input){
  const file=input.files[0];if(!file)return;const uploadProduct=product;
- if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>20*1024*1024){$('message').textContent='请选择 20 MB 以内的 JPG、PNG 或 WebP 图片。';input.value='';return;}
  const workspace=$('workspace'),wasInert=Boolean(workspace.inert);workspace.inert=true;
  input.disabled=true;$('message').textContent='正在压缩并上传图片…';
  try{
-  const bitmap=await createImageBitmap(file);const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
-  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
-  let blob;for(const quality of [.85,.7,.5]){blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',quality));if(blob&&blob.size<=512*1024)break;}
-  if(!blob||blob.type!=='image/webp'||blob.size>512*1024)throw new Error('图片压缩失败，请选择较小的图片或填写图片地址。');
-  const r=await fetch('/api/team/upload',{method:'POST',headers:{'Content-Type':'image/webp'},body:blob});const v=await r.json();if(!r.ok)throw new Error(v.error||'上传失败');
+  const {uploadPhoto}=await import('./photo-upload.js'),url=await uploadPhoto(file);
   if(product!==uploadProduct)throw new Error('当前产品已切换，本次上传未应用。请在目标产品重新选择图片。');
-  const p=JSON.parse(input.dataset.upload),key=p.pop();at(p)[key]=v.url;dirty=true;draw();$('message').textContent='图片已上传。请保存草稿并预览，发布后才会更换官网图片。';
+  const p=JSON.parse(input.dataset.upload),key=p.pop();at(p)[key]=url;dirty=true;draw();$('message').textContent='图片已上传。请保存草稿并预览，发布后才会更换官网图片。';
  }catch(e){$('message').textContent=e.message;}finally{workspace.inert=wasInert;input.disabled=false;input.value='';}
 }
 

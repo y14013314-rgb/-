@@ -1,8 +1,14 @@
 import {withAnalytics} from '../lib/content/analytics.mjs';
+import {indexPage} from '../lib/content/search-ui.mjs';
 import { buildCatalog } from './catalog.mjs';
 import { renderTrain } from '../lib/content/render-train.mjs';
+import {railDetail} from '../lib/content/rail-detail.mjs';
 import {collections,cardPattern} from '../lib/content/editorial.mjs';
-import { cpSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {base,initialLayout,signatures} from '../lib/content/private-seed.mjs';
+import {signatureSource,sections} from '../lib/content/private-shell.mjs';
+import {renderUnifiedGallery} from '../lib/content/gallery.mjs';
+import {workspaceNavigation} from '../team/workspace-navigation.mjs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,27 +61,37 @@ writeFileSync(join(output, productUrl, 'index.html'), detail);
 writeFileSync(join(output, collection, 'index.html'), collectionSource.replace(cardSlot, () => card));
 cpSync(join(root, 'pages/inquiry.js'), join(output, 'pages-inquiry.js'));
 cpSync(join(root, 'team/public'), join(output, 'team'), { recursive: true });
+const manager=join(output,'team/index.html');
+writeFileSync(manager,workspaceNavigation(readFileSync(manager,'utf8')));
+const privateLayout=initialLayout();
+for(const row of signatures){const folder=join(output,'journeys',row[0]);mkdirSync(folder,{recursive:true});writeFileSync(join(folder,'index.html'),renderUnifiedGallery(signatureSource(row,privateLayout),catalog[row[0]].product,origin,true));}
+const privatePaths=[...Object.keys(sections).map(key=>base+key+'/'),...signatures.map(row=>'/journeys/'+row[0]+'/')];
+const searchPages=[];
 for (const file of readdirSync(output, { recursive: true }).filter(file => file.endsWith('.html'))) {
   const path = join(output, file);
-  const html=readFileSync(path, 'utf8').replaceAll(oldOrigin, origin);
+  let html=readFileSync(path, 'utf8').replaceAll(oldOrigin, origin);
+  const train=file.match(/^silk-road-luxury-trains\/([^/]+)\/index\.html$/);
+  if(train)html=railDetail(html,train[1]===product.slug?product:catalog[train[1]].product);
+  if(/(?:^|\/)index\.html$/.test(file)&&!/^(team|admin|quote)\//.test(file)&&!html.includes('http-equiv="refresh"'))searchPages.push(indexPage('/'+file.replace(/index\.html$/,''),html));
   writeFileSync(path, /^(team|admin|quote)\//.test(file)?html:withAnalytics(html));
 }
 const sitemap = readFileSync(join(source, 'sitemap.xml'), 'utf8');
+writeFileSync(join(root,'lib/content/search-seed.mjs'),'export default '+JSON.stringify(searchPages)+';\n');
 writeFileSync(join(output, 'sitemap.xml'), sitemap.replaceAll(oldOrigin, origin)
-  .replace(/<url><loc>[^<]+\/(plan-my-trip|destinations|signature-experiences)\/<\/loc><\/url>/g, ''));
+  .replace(/<url><loc>[^<]+\/(plan-my-trip|destinations|signature-experiences)\/<\/loc><\/url>/g, '').replace('</urlset>',privatePaths.map(path=>`<url><loc>${origin}${path}</loc></url>`).join('')+'</urlset>'));
 writeFileSync(join(output, 'robots.txt'), live
   ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\nDisallow: /team/\nSitemap: ${origin}/sitemap.xml\n`
   : 'User-agent: *\nDisallow: /\n');
-writeFileSync(join(output, '_headers'), '/*\n  Referrer-Policy: no-referrer\n  X-Content-Type-Options: nosniff\n'
+writeFileSync(join(output, '_headers'), '/*\n  Referrer-Policy: no-referrer\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n'
   + (live
     ? '\nhttps://:project.pages.dev/*\n  X-Robots-Tag: noindex\n\nhttps://:version.:project.pages.dev/*\n  X-Robots-Tag: noindex\n'
     : '  X-Robots-Tag: noindex\n')
   + ['/home-v1.js','/pages-inquiry.js','/analytics.js'].map(path => '\n'+path+'\n  Cache-Control: no-cache\n').join('')
-  + '\n/team/*\n  X-Robots-Tag: noindex\n  Cache-Control: no-store\n  Content-Security-Policy: default-src \'self\'; img-src \'self\' https: data: blob:; media-src \'self\' https: blob:; connect-src \'self\' https://upload.imagekit.io; frame-src https://www.youtube.com; frame-ancestors \'none\'; base-uri \'none\'; form-action \'self\'\n');
+  + '\n/team/*\n  X-Robots-Tag: noindex\n  Cache-Control: no-store\n  Content-Security-Policy: default-src \'self\'; img-src \'self\' https: data: blob:; media-src \'self\' https: blob:; connect-src \'self\' https://upload.imagekit.io; frame-src https://www.youtube.com https://v.qq.com https://v-hls.chinadaily.com; frame-ancestors \'none\'; base-uri \'none\'; form-action \'self\'\n');
 writeFileSync(join(output, '_redirects'), ['/payment', '/payment/', '/plan-my-trip', '/plan-my-trip/']
   .map(path => path + ' /#request-quote 302\n').join(''));
 writeFileSync(join(output, '_routes.json'), JSON.stringify({
-  version: 1, include: ['/', '/sitemap.xml', '/api/inquiries', '/api/inquiries/', '/api/team/*', '/media/*', '/silk-road-luxury-trains/*', '/yangtze-river-cruises/*', '/journeys/*', '/destinations/*', '/signature-experiences/*', '/experiences/*', '/wildlife/*', '/private-china-tours/'], exclude: [],
+  version: 1, include: ['/', '/search/', '/sitemap.xml', '/api/inquiries', '/api/inquiries/', '/api/team/*', '/media/*', '/silk-road-luxury-trains/*', '/yangtze-river-cruises/*', '/journeys/*', '/destinations/*', '/signature-experiences/*', '/experiences/*', '/wildlife/*', '/private-china-tours/*'], exclude: [],
 }) + '\n');
 writeFileSync(join(output, '404.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>Page not found | SUKHA</title><h1>Page not found</h1><p><a href="/">Return to SUKHA</a></p></html>\n');
 console.log(`Pages ${live ? 'live' : 'preview'} built in ${output}`);

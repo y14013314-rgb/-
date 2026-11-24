@@ -1,0 +1,6 @@
+.site-search{display:flex;align-items:center;gap:.4rem;width:min(88%,36rem);margin:1rem auto;padding:.25rem .35rem .25rem 1rem;border:1px solid #65786f;border-radius:2rem;background:transparent;color:#263d37;box-sizing:border-box}
+.site-search input[type=search]{min-width:0;flex:1;margin:0;padding:.5rem 0;border:0;background:transparent;color:inherit;font:inherit}.site-search input::placeholder{color:inherit;opacity:.9}
+.site-search button{min-height:44px;padding:0 1rem;border:0;border-radius:2rem;background:#263d37;color:white;cursor:pointer;font:inherit}.site-search :focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.home-hero .site-search{position:absolute;z-index:2;top:15%;right:6%;width:min(36%,29rem);margin:0;background:rgba(21,37,32,.45);border-color:#ffffffe0;color:white;backdrop-filter:blur(6px)}.home-hero .site-search button{background:transparent;border-left:1px solid #ffffff80;border-radius:0 2rem 2rem 0}
+@media(max-width:800px){.home-hero .site-search{top:1.5rem;width:88%}}
+.search-results .site-search{margin:1rem 0;width:100%}.search-cards small{padding:14px 14px 0;color:#53665b;letter-spacing:.05em}.search-cards strong{font:normal 1.35rem/1.25 Georgia,serif;padding-top:6px}.search-pages{margin-top:2rem}.search-pages summary{cursor:pointer}.search-pages li{margin:.5rem 0}

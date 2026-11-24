@@ -7,6 +7,7 @@
 目的地和私人行程/体验图片使用真实摄影：复用首页已核对的 Pexels 图片，并新增 7 张。Pexels 许可：https://www.pexels.com/license/ 。未使用视觉中国水印预览或未经购买的付费图片。
 
 - beijing：https://www.pexels.com/photo/28626145/ → `public/assets/home-v1/beijing.webp`
+- Beijing gallery, Palace Museum: Kikolipu, [The Palace Museum.jpg](https://commons.wikimedia.org/wiki/File:The_Palace_Museum.jpg), CC0 · `public/assets/travel-real/beijing-palace.jpg` (1280px thumbnail).
 - shanghai：https://www.pexels.com/photo/612419/ → `public/assets/home-v1/shanghai.webp`
 - guilin：https://www.pexels.com/photo/24246259/ → `public/assets/home-v1/guilin.webp`
 - yunnan：https://www.pexels.com/photo/31226849/ → `public/assets/home-v1/yunnan.webp`

@@ -71,3 +71,8 @@ test('video URL editing refreshes the preview without redrawing or losing the dr
  input.onchange();assert.match(preview.innerHTML,/src="https:\/\/www.youtube.com\/embed\/M7lc1UVf-VE"/);assert(!preview.innerHTML.includes('<video'));assert.equal(context.state().product.videoUrl,input.value);assert.equal(context.state().product.title,'Keep my edits');assert.equal(context.state().dirty,true);
  input.value='https://example.test/new.mp4';input.onchange();assert.match(preview.innerHTML,/<video[^>]*src="https:\/\/example.test\/new.mp4"/);
 });
+
+test('private editorial products expose one video upload control',()=>{
+ const source=readFileSync(new URL('../team/public/team.js',import.meta.url),'utf8');
+ assert.match(source,/if\(!editorDefaults\.rail&&!editorDefaults\.privateEditorial\)groups\.media\.push\(fields\(\{videoUrl:/);
+});

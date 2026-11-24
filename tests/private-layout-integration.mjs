@@ -1,0 +1,450 @@
+import {onRequest as trainCollectionRequest} from '../functions/silk-road-luxury-trains/index.js';
+import {onRequest as sitemapRequest} from '../functions/sitemap.xml.js';
+import {onRequest as destinationRequest} from '../functions/destinations/[slug].js';
+import {onCatalogPage,catalogCollection,updateCards} from '../lib/content/catalog-published.mjs';
+import {catalog,validateCatalogProduct,renderCatalogProduct} from '../lib/content/catalog-product.mjs';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {upload,image,maxImageBytes} from '../lib/content/media.mjs';
+import {videoAuth,maxVideoBytes,youtubeEmbedUrl} from '../lib/content/video.mjs';
+import {onMembers} from '../lib/content/members.mjs';
+import {member} from '../lib/content/auth.mjs';
+import {onContent} from '../lib/content/content-api.mjs';
+import {published} from '../lib/content/published.mjs';
+import {digest} from '../lib/content/auth.mjs';
+import {cookieName} from '../lib/content/auth.mjs';
+import {layoutApi,privateState,validLayout} from '../lib/content/private-layout.mjs';
+import {privatePage,privateRequest} from '../lib/content/private-pages.mjs';
+import {validateProduct} from '../lib/content/product.mjs';
+import {renderTrain} from '../lib/content/render-train.mjs';
+import template from '../lib/content/train-template.mjs';
+const seed=JSON.parse(readFileSync(new URL('../content/products/baiyun.json',import.meta.url)));
+test('all private tour placements can change independently; drafts, preview, concurrent edits and publishing remain separate',async()=>{
+ const {env,token,call}=await setup(),origin=env.SITE_URL;
+ const request=(path,body,authenticated=true)=>new Request(origin+path,{method:body?'POST':'GET',headers:{Origin:origin,'Content-Type':'application/json',...(authenticated?{Cookie:cookieName+'='+token}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const api=(body,authenticated)=>layoutApi({env,request:request('/api/team/private-layout',body,authenticated)});
+ const page=(path,authenticated=true)=>privateRequest({env,request:request('/private-china-tours/'+path,null,authenticated)});
+ assert.equal((await api(null,false)).status,401);const {layout,tours}=await (await api()).json();assert(validLayout(layout));
+ assert.deepEqual([layout.first.length,layout.second.length,layout.destinations.length,layout.styles.length,...layout.collections.map(item=>item.tours.length)],[6,3,18,6,3,3,4]);
+ const removed=layout.first.splice(3);layout.more.push(...removed);layout.second.reverse();layout.themes.reverse();layout.series.reverse();
+ layout.destinations.find(item=>item.id==='guizhou').experiences=[{title:'New village walk',image:''}];layout.styles[0].experiences=[];layout.collections[2].tours.push(layout.collections[0].tours.shift());
+ assert.equal((await api({action:'save',revision:0,layout})).status,200);assert.equal((await api({action:'save',revision:0,layout})).status,409);
+ assert.equal((await page('destinations/?layout-preview=1',false)).status,401);const live=await privateState(env.TEAM_DB);assert.equal(live.layout.first.length,6);
+ const preview=await page('destinations/guizhou/?layout-preview=1');assert.match(await preview.text(),/New village walk/);assert.match(preview.headers.get('X-Robots-Tag'),/noindex/);
+ env.TEAM_PUBLISH='0';assert.equal((await api({action:'publish',revision:1})).status,403);env.TEAM_PUBLISH='1';assert.equal((await api({action:'publish',revision:1})).status,200);
+ const after=await privateState(env.TEAM_DB);assert.deepEqual(after.layout,layout);assert.equal(Object.keys(after.tours).length,Object.keys(tours).length);
+ const html=await (await page('destinations/')).text();assert.doesNotMatch(html,/Featured Private Journeys|More Recommended Journeys|id="destination-index"/);
+ const shared=layout.styles[0].tours[0];await call('unpublish',{slug:shared,revision:0});assert(!(await (await page('travel-styles/wildlife/')).text()).includes('/journeys/'+shared+'/'));
+ const list=await (await call('products')).json();assert(list.products.every(item=>item.slug!=='@private-tours-layout'));
+});
+test('journey filters, empty results and custom destination or style cards resolve to public pages',async()=>{
+ const state=await privateState(null),show=path=>privatePage(state,new URL('https://site.test/private-china-tours/'+path));
+ assert.equal((show('signature-journeys/').match(/href="\/journeys\//g)||[]).length,10);
+ const winter=show('signature-journeys/?season=Winter');assert.match(winter,/\/journeys\/winter-wonders\//);assert.doesNotMatch(winter,/\/journeys\/grand-china-discovery\//);
+ assert.match(show('signature-journeys/?season=Winter&length=19%2B+Days'),/No matches/);
+ const central=show('destinations/?region=Central+China').split('id="by-region"')[1];assert.match(central,/data-region="Central China"><a href="[^"]*\/henan\//);assert.match(central,/data-region="North China" hidden><a href="[^"]*\/beijing\//);
+ const groups=[...show('destinations/').matchAll(/<section id="(popular|deep|by-region)">([\s\S]*?)<\/section>/g)];assert.deepEqual(groups.map(([,id,body])=>[id,body.split('<details class="pt-more">').map(part=>(part.match(/class="pt-card"/g)||[]).length)]),[['popular',[6]],['deep',[3,3]],['by-region',[18]]]);assert.doesNotMatch(groups[0][2],/Show More/);
+ const item={...state.layout.styles[0],id:'new-theme',title:'New Theme'};state.layout.styles.push(item);state.layout.themes.push(item.id);assert.doesNotMatch(show('travel-styles/'),/new-theme/);assert.match(show('travel-styles/new-theme/'),/New Theme/);
+ state.layout.first.push(state.layout.second[0]);assert.equal(validLayout(state.layout),false);
+});
+async function setup(){
+ const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../team/schema.sql',import.meta.url),'utf8'));
+ const db={async batch(statements){return Promise.all(statements.map(s=>s.run()));},prepare(query){let values=[];return {bind(...v){values=v;return this;},async first(){return sql.prepare(query).get(...values)||null;},async all(){return {results:sql.prepare(query).all(...values)};},async run(){return sql.prepare(query).run(...values);}};}};
+ const token=crypto.randomUUID()+crypto.randomUUID();sql.prepare('INSERT INTO login_sessions VALUES (?,?,?)').run(await digest(token),'owner@example.test',Date.now()+60000);
+ const env={TEAM_DB:db,TEAM_ADMIN_EMAIL:'owner@example.test',TEAM_PUBLISH:'1',SITE_URL:'https://sukhatrip.com'};
+ const call=(action,body,options={})=>(action==='members'?onMembers:onContent)({env,params:{action:action.split('?')[0]},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:options.origin||'https://sukhatrip.com','Content-Type':'application/json',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})},...(body?{body:JSON.stringify(body)}:{})})});
+ const page=collection=>published({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/baiyun/'),next:async()=>new Response(collection?'<article class="cruise-collection-card" id="baiyun">original card</article>':'original page')},collection);
+ return {env,call,page,sql,token};
+}
+test('video upload authorization enforces sessions, origin, configuration, rate and signed restrictions',async()=>{
+ const {env,token}=await setup();
+ const call=(options={})=>videoAuth({env,request:new Request('https://sukhatrip.com/api/team/video-auth',{method:options.method||'POST',headers:{Origin:options.origin||'https://sukhatrip.com',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})}})});
+ assert.equal((await call({anonymous:true})).status,401);
+ assert.equal((await call({origin:'https://evil.test'})).status,403);
+ assert.equal((await call({method:'GET'})).status,405);
+ assert.equal((await call()).status,503);
+ env.IMAGEKIT_PRIVATE_KEY='test-key-not-real';
+ const r=await call(),v=await r.json();assert.equal(r.status,200);assert.equal(r.headers.get('Cache-Control'),'no-store');
+ const [header,payload,signature]=v.token.split('.'),p=JSON.parse(Buffer.from(payload,'base64url'));
+ assert.equal(JSON.parse(Buffer.from(header,'base64url')).kid,'public_AwTSuxst7OTsYoBXsqHLDtLKIP4=');
+ assert.equal(p.exp-p.iat,600);assert.match(p.fileName,/^[a-f0-9-]+\.mp4$/);assert.equal(p.folder,'/sukha-videos');
+ assert.equal(p.checks,'"file.mime" IN ["video/mp4"] AND "file.size" > 0 AND "file.size" <= '+maxVideoBytes);
+ assert.equal(p.overwriteFile,'false');assert.deepEqual(v.parameters,Object.fromEntries(Object.entries(p).filter(([k])=>!['iat','exp'].includes(k))));
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.IMAGEKIT_PRIVATE_KEY),{name:'HMAC',hash:'SHA-256'},false,['verify']);
+ assert(await crypto.subtle.verify('HMAC',key,Buffer.from(signature,'base64url'),new TextEncoder().encode(header+'.'+payload)));
+ assert(!JSON.stringify(v).includes(env.IMAGEKIT_PRIVATE_KEY));
+ assert.notEqual((await (await call()).json()).token,v.token);
+ for(let i=2;i<30;i++)assert.equal((await call()).status,200);
+ assert.equal((await call()).status,429);
+});
+test('catalog videos preserve templates until saved and published, including pages without video',async()=>{
+ const {call,env}=await setup(),url='https://ik.imagekit.io/negxem1l9/C0642.MP4';
+ for(const slug of ['chengdu','classic-china','homepage']){
+  const p=structuredClone(catalog[slug].product),original=renderCatalogProduct(p,env.SITE_URL);p.videoUrl=url;validateCatalogProduct(p);
+  assert.equal((await call('save',{product:p,revision:0})).status,200);
+  const preview=await (await call('preview?slug='+slug)).text();assert(preview.includes(url));assert(!original.includes(url));
+  const rowBefore=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();assert.equal(rowBefore.published,null);
+  assert.equal((await call('publish',{slug,revision:1})).status,200);
+  const row=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();assert(renderCatalogProduct(JSON.parse(row.published),env.SITE_URL).includes(url));
+  p.videoUrl='javascript:alert(1)';assert.throws(()=>validateCatalogProduct(p));
+  p.videoUrl='';validateCatalogProduct(p);assert(!renderCatalogProduct(p,env.SITE_URL).includes('<video'));
+ }
+ const p=structuredClone(seed);p.film.src=url;validateProduct(p);assert(renderTrain(p,template,env.SITE_URL).detail.includes(url));
+});
+test('YouTube links replace the existing snow leopard film after saving and publishing',async()=>{
+ const {call,env}=await setup(),slug='wildlife-sanjiangyuan-snow-leopard';
+ const p=structuredClone(catalog[slug].product),id='M7lc1UVf-VE',frame='https://www.youtube.com/embed/'+id;
+ for(const url of ['https://www.youtube.com/watch?v='+id,'https://youtu.be/'+id+'?si=share','https://www.youtube.com/shorts/'+id,frame])assert.equal(youtubeEmbedUrl(url),frame);
+ for(const url of ['https://youtube.com.evil.test/watch?v='+id,'javascript:alert(1)','https://youtube.com/watch?v=bad'])assert.equal(youtubeEmbedUrl(url),'');
+ p.videoUrl='https://www.youtube.com/watch?v='+id;
+ const original=renderCatalogProduct(catalog[slug].product,env.SITE_URL),old=original.match(/data-film-src="([^"]+)"/)[1];
+ assert.equal((await call('save',{product:p,revision:0})).status,200);
+ const preview=await (await call('preview?slug='+slug)).text();
+ assert(preview.includes('data-film-frame="'+frame+'"'));assert(!preview.includes('data-film-src='));assert(!preview.includes(old));assert(!preview.includes('<video'));
+ assert.equal((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published,null);
+ assert.equal((await call('publish',{slug,revision:1})).status,200);
+ const live=await onCatalogPage({env,request:new Request(env.SITE_URL+catalog[slug].path),next:async()=>new Response(original)},slug);
+ assert((await live.text()).includes('data-film-frame="'+frame+'"'));
+ p.videoUrl='https://example.test/new.mp4';const mp4=renderCatalogProduct(p,env.SITE_URL);assert(mp4.includes('data-film-src="'+p.videoUrl+'"'));assert(!mp4.includes(old));assert(!mp4.includes('<video'));
+ p.videoUrl='';assert(!renderCatalogProduct(p,env.SITE_URL).includes('data-film-title='));
+ const home=structuredClone(catalog.homepage.product);home.videoUrl='https://youtu.be/'+id;assert(renderCatalogProduct(home,env.SITE_URL).includes('<iframe title="Product video" src="'+frame+'"'));
+ const train=structuredClone(seed);train.film.src='https://youtu.be/'+id;assert(renderTrain(train,template,env.SITE_URL).detail.includes('<iframe title="Product video" src="'+frame+'"'));
+});
+test('destination additions continue the existing day list in preview and only go live after publication',async()=>{
+ const {call,env}=await setup();
+ const additions=[
+  {title:'DAY 06 — Tashilhunpo & a return to Lhasa',description:'Visit the monastery.\nReturn to Lhasa.'},
+  {title:'DAY 07 — Namtso & the northern plateau',description:'Explore the lake.'},
+  {title:'Onward <travel>',description:'Keep <script>literal</script> & flexible.'},
+ ];
+ for(const entry of Object.values(catalog).filter(e=>e.category==='destinations')){
+  const p=structuredClone(entry.product),before=renderCatalogProduct(p,env.SITE_URL);
+  p.sections=[];assert.equal(renderCatalogProduct(p,env.SITE_URL),before);
+  p.sections=structuredClone(additions);const html=renderCatalogProduct(p,env.SITE_URL),days=html.match(/<ol class="destination-days">([\s\S]*?)<\/ol>/)[1];
+  assert(days.includes('<span>DAY 06</span><div><h3>Tashilhunpo &amp; a return to Lhasa</h3><p>Visit the monastery.<br>Return to Lhasa.</p>'));
+  assert(days.includes('<span>DAY 07</span><div><h3>Namtso &amp; the northern plateau</h3>'));
+  assert(days.includes('<span>DAY 08</span><div><h3>Onward &lt;travel&gt;</h3>'));
+  assert(!html.includes('class="article-section"'));assert(!html.includes('<script>literal</script>'));
+  assert.equal(html.split('Tashilhunpo &amp; a return to Lhasa').length,2);
+  assert(html.indexOf('Namtso &amp; the northern plateau')<html.indexOf('destination-next'));
+  if(p.slug==='destination-tibet'){
+   assert.equal((await call('save',{product:p,revision:0})).status,200);
+   const page=()=>onCatalogPage({env,request:new Request(env.SITE_URL+entry.path),next:async()=>new Response(before)},p.slug);
+   assert.equal(await (await page()).text(),before);
+   assert.equal(await (await call('preview?slug='+p.slug)).text(),html);
+   assert.equal((await call('publish',{slug:p.slug,revision:1})).status,200);
+   assert.equal(await (await page()).text(),html);
+  }
+  const numbered=p.sections.map(s=>s.title);assert.deepEqual(numbered,additions.map(s=>s.title));
+ }
+ const p=structuredClone(catalog['destination-tibet'].product);p.sections=[{title:'Extra day',description:'Continue exploring.'}];
+ assert(renderCatalogProduct(p,env.SITE_URL).includes('<span>DAY 05</span><div><h3>Extra day</h3>'));
+ p.sections=[{title:'DAY 06',description:'Continue exploring.'}];
+ assert(renderCatalogProduct(p,env.SITE_URL).includes('<span>DAY 06</span><div><p>Continue exploring.</p>'));
+ const other=structuredClone(catalog['wildlife-sanjiangyuan-snow-leopard'].product);other.sections=additions;
+ assert(renderCatalogProduct(other,env.SITE_URL).includes('<article class="article-section"><h2>DAY 06 — Tashilhunpo &amp; a return to Lhasa</h2>'));
+});
+test('product photo counts persist through drafts, previews, publication and template cloning',async()=>{
+ const {call,env}=await setup();
+ for(const baseSlug of ['baiyun','chengdu','classic-china','gold-cruises']){
+  const slug='gallery-'+baseSlug;
+  assert.equal((await call('create',{baseSlug,slug,title:'Gallery test'})).status,201);
+  const initial=await (await call('product?slug='+slug)).json();
+  assert(initial.gallery.length>0);assert.equal(initial.product.gallery,undefined);
+  const product=initial.product;
+  product.galleryUnified=true;
+  product.gallery=Array.from({length:3},(_,index)=>({src:`https://example.test/${slug}-${index}.webp`,alt:'Photo '+index,credit:''}));
+  assert.equal((await call('save',{product,revision:initial.revision})).status,200);
+  const saved=await (await call('product?slug='+slug)).json();
+  assert.deepEqual(saved.product.gallery,product.gallery);
+  assert.deepEqual(saved.gallery,product.gallery);
+  const preview=await (await call('preview?slug='+slug)).text();
+  for(const image of product.gallery)assert(preview.includes(image.src));
+  assert.equal((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published,null);
+  assert.equal((await call('publish',{slug,revision:saved.revision})).status,200);
+  const published=await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first();
+  assert.deepEqual(JSON.parse(published.published).gallery,product.gallery);
+  const cloneSlug=slug+'-clone';
+  assert.equal((await call('create',{baseSlug:slug,slug:cloneSlug,title:'Copy'})).status,201);
+  assert.deepEqual((await (await call('product?slug='+cloneSlug)).json()).product.gallery,product.gallery);
+  product.gallery=[product.gallery[2]];
+  assert.equal((await call('save',{product,revision:saved.revision+1})).status,200);
+  assert.equal(JSON.parse((await env.TEAM_DB.prepare('SELECT published FROM product_content WHERE slug=?').bind(slug).first()).published).gallery.length,3);
+  const reduced=await (await call('preview?slug='+slug)).text();
+  assert(reduced.includes(product.gallery[0].src));
+  assert(!reduced.includes(`https://example.test/${slug}-0.webp`));
+  assert.equal((await call('publish',{slug,revision:saved.revision+2})).status,200);
+  assert.equal((await call('save',{product:{...product,gallery:[]},revision:saved.revision+3})).status,400);
+ }
+});
+test('draft privacy, saved preview, publication and revision conflicts',async()=>{
+ const {call,page}=await setup();
+ assert.equal((await call('product',null,{anonymous:true})).status,401);
+ const p=structuredClone(seed);p.title='Edited train';p.price={status:'from',currency:'CNY',amount:10000};
+ assert.equal((await call('save',{product:p,revision:0},{origin:'https://evil.test'})).status,403);
+ assert.equal((await call('save',{product:p,revision:0})).status,200);
+ assert.equal(await (await page()).text(),'original page');
+ assert((await (await call('preview')).text()).includes('Edited train'));
+ assert.equal((await call('save',{product:p,revision:0})).status,409);
+ assert.equal((await call('publish',{revision:0})).status,409);
+ assert.equal((await call('publish',{revision:1})).status,200);
+ assert((await (await page()).text()).includes('Edited train'));
+ assert((await (await page(true)).text()).includes('From CNY 10,000 per person'));
+ p.title='Not yet published';assert.equal((await call('save',{product:p,revision:2})).status,200);
+ assert(!(await (await page()).text()).includes('Not yet published'));
+});
+test('invalid content and script-bearing fields',async()=>{
+ const {call}=await setup();const p=structuredClone(seed);p.image.src='javascript:alert(1)';
+  assert.throws(()=>validateProduct(p),/封面图片/);assert.equal((await call('save',{product:p,revision:0})).status,400);
+ p.image.src='/assets/trains/baiyun-salon.webp';p.title='<script>alert(1)</script>';p.description='A & B';
+ validateProduct(p);const r=renderTrain(p,template,'https://sukhatrip.com');
+ assert(!r.detail.includes('<script>alert(1)</script>'));assert(r.card.includes('&lt;script&gt;'));
+ p.days=-1;assert.throws(()=>validateProduct(p));
+});
+test('preview environment cannot publish and save requires a current revision',async()=>{
+ const {call,env}=await setup();env.TEAM_PUBLISH='0';
+ assert.equal((await call('publish',{revision:0})).status,403);
+ assert.equal((await call('save',{product:seed,revision:4})).status,409);
+ assert.equal((await call('save',{product:seed,revision:0})).status,200);
+ const [a,b]=await Promise.all([call('save',{product:seed,revision:1}),call('save',{product:seed,revision:1})]);
+ assert.deepEqual([a.status,b.status].sort(),[200,409]);
+});
+
+test('member grants, self-publication and immediate revocation',async()=>{
+ const {env,call,sql}=await setup();
+ assert.equal((await call('members',null,{anonymous:true})).status,401);
+ assert.equal((await call('members',{email:'staff@example.test',active:true})).status,200);
+ assert.equal((await member('staff@example.test',env)).role,'editor');
+ const listing=await (await call('members')).json();assert.equal(listing.members.length,1);
+ assert.equal((await call('members',{email:'owner@example.test',active:false})).status,400);
+ const token=crypto.randomUUID()+crypto.randomUUID();sql.prepare('INSERT INTO login_sessions VALUES (?,?,?)').run(await digest(token),'staff@example.test',Date.now()+60000);
+ const invoke=(handler,action,body)=>handler({env,params:{action:action.split('?')[0]},request:new Request('https://sukhatrip.com/api/team/'+action,{method:body?'POST':'GET',headers:{Origin:'https://sukhatrip.com','Content-Type':'application/json',Cookie:'__Host-sukha-team='+token},...(body?{body:JSON.stringify(body)}:{})})});
+ assert.equal((await invoke(onMembers,'members')).status,403);
+ assert.equal((await (await invoke(onContent,'product')).json()).canPublish,true);
+ assert.equal((await invoke(onContent,'publish',{revision:0})).status,409);
+ assert.equal((await invoke(onContent,'save',{revision:0,product:seed})).status,200);
+ assert.equal((await invoke(onContent,'publish',{revision:1})).status,200);
+ assert.equal((await call('members',{email:'staff@example.test',active:false})).status,200);
+ assert.equal(await member('staff@example.test',env),null);
+ assert.equal((await invoke(onContent,'product')).status,401);
+ assert.equal((await call('members',{email:'staff@example.test',active:true})).status,200);
+ assert.equal((await invoke(onContent,'product')).status,401);
+});
+
+test('image upload permission, byte limits and public image response',async()=>{
+ const {env,token}=await setup();const bytes=readFileSync(new URL('../public/assets/trains/baiyun-salon.webp',import.meta.url));
+ const send=(body,options={})=>upload({env,request:new Request('https://sukhatrip.com/api/team/upload',{method:'POST',headers:{Origin:options.origin||'https://sukhatrip.com','Content-Type':'image/webp',...(options.anonymous?{}:{Cookie:'__Host-sukha-team='+token})},body})});
+ assert.equal((await send(bytes,{anonymous:true})).status,401);
+ assert.equal((await send(bytes,{origin:'https://evil.test'})).status,403);
+ assert.equal((await send(new Uint8Array(maxImageBytes+1))).status,413);
+ assert.equal((await send(new TextEncoder().encode('<script>alert(1)</script>'))).status,400);
+ const r=await send(bytes);assert.equal(r.status,200);const {url}=await r.json();
+ const served=await image({env,params:{id:url.split('/').pop()},request:new Request('https://sukhatrip.com'+url,{headers:{Cookie:cookieName+'='+token}})});
+ assert.equal(served.headers.get('Content-Type'),'image/webp');assert.deepEqual(new Uint8Array(await served.arrayBuffer()),new Uint8Array(bytes));
+ const p=structuredClone(seed);p.image.src=url;validateProduct(p);
+});
+
+test('catalog products and homepage keep drafts separate and render escaped updates',async()=>{
+ const {call}=await setup();assert.equal(Object.values(catalog).filter(entry=>entry.category==='journeys').length,20);
+ for(const [slug,e] of Object.entries(catalog)){
+  const p=structuredClone(e.product);validateCatalogProduct(p);p.title='Edited '+slug;
+  const text=e.fields.find(f=>f.type==='text');p.values[text.key]='<script>unsafe</script>';
+  const html=renderCatalogProduct(p,'https://sukhatrip.com');assert(html.includes('Edited '+slug));assert(!html.includes('<script>unsafe</script>'));assert(!html.includes('{{CMS_'));
+  assert.equal((await call('save',{product:p,revision:0})).status,200);
+  assert.equal((await call('publish',{slug,revision:1})).status,200);
+ }
+ assert.equal((await call('save',{product:{slug:'unlisted'},revision:0})).status,404);
+});
+
+test('published catalog name updates matching collection card only',()=>{
+ const e=catalog['chengdu'],p=structuredClone(e.product);p.title='New & Name';
+ const html='<article><a href="'+e.path+'">Photo</a><h2>Old name</h2></article><article><h2>Other product</h2></article>';
+ const result=updateCards(html,[{slug:p.slug,published:JSON.stringify(p)}]);assert(result.includes('<h2>New &amp; Name</h2>'));assert(result.includes('<h2>Other product</h2>'));
+});
+
+test('create, publish, feature, unpublish and relaunch a new private journey',async()=>{
+ const {call,env}=await setup();const slug='new-family-journey';
+ assert.equal((await call('create',{slug,title:'Family Journey',baseSlug:'classic-china'})).status,201);
+ assert.equal((await call('create',{slug,title:'Duplicate',baseSlug:'classic-china'})).status,409);
+ assert.equal((await call('create',{slug:'invalid-template',title:'Bad',baseSlug:'homepage'})).status,400);
+ let item=await (await call('product?slug='+slug)).json();assert.equal(item.product.templateSlug,'classic-china');assert.equal(item.url,'/journeys/'+slug+'/');
+ const page=()=>onCatalogPage({env,params:{slug},request:new Request('https://sukhatrip.com/journeys/'+slug+'/'),next:async()=>new Response('missing',{status:404})});
+ assert.equal((await page()).status,404);
+ item.product.featured=true;item.product.sections=[{title:'Day 20',description:'Additional touring day <safe>'}];assert.equal((await call('save',{product:item.product,revision:1})).status,200);
+ assert.equal((await call('publish',{slug,revision:2})).status,200);
+ const live=await page();assert.equal(live.status,200);const html=await live.text();assert(html.includes('Family Journey'));assert(html.includes('Additional touring day &lt;safe&gt;'));assert(html.includes('https://sukhatrip.com/journeys/'+slug+'/'));
+ const collection=path=>catalogCollection({env,request:new Request('https://sukhatrip.com'+path),next:async()=>new Response('<main><section id="itineraries"><div id="journey-results"></div></section></main>',{headers:{'Content-Type':'text/html'}})});
+ assert((await (await collection('/private-china-tours/')).text()).includes('/journeys/'+slug+'/'));
+ assert((await (await collection('/')).text()).includes('/journeys/'+slug+'/'));
+ const sitemap=()=>sitemapRequest({env,request:new Request('https://sukhatrip.com/sitemap.xml'),next:async()=>new Response('<urlset></urlset>')});
+ assert((await (await sitemap()).text()).includes('/journeys/'+slug+'/'));
+ assert.equal((await call('unpublish',{slug,revision:3})).status,200);assert.equal((await page()).status,404);
+ assert(!(await (await collection('/private-china-tours/')).text()).includes('/journeys/'+slug+'/'));
+ assert(!(await (await sitemap()).text()).includes('/journeys/'+slug+'/'));
+ assert.equal((await call('publish',{slug,revision:4})).status,200);assert.equal((await page()).status,200);
+});
+test('existing products can be withdrawn without erasing drafts and homepage stays available',async()=>{
+ const {call,env}=await setup();assert.equal((await call('unpublish',{slug:'chengdu',revision:0})).status,200);
+ const item=await (await call('product?slug=chengdu')).json();assert.equal(item.hidden,true);assert(item.product.title);
+ const page=await onCatalogPage({env,params:{slug:'chengdu'},request:new Request('https://sukhatrip.com/silk-road-luxury-trains/chengdu/'),next:async()=>new Response('existing content')});assert.equal(page.status,404);
+ assert.equal((await call('unpublish',{slug:'homepage',revision:0})).status,400);
+ const home=await (await call('product?slug=homepage')).json();assert(home.fields.length>0);assert.equal(home.canUnpublish,false);
+ assert.equal((await call('save',{product:home.product,revision:0})).status,200);assert.equal((await call('publish',{slug:'homepage',revision:1})).status,200);
+ const list=await (await call('products')).json();assert.equal(list.products.find(p=>p.slug==='chengdu').hidden,true);assert(list.templates.every(p=>!['home','collection'].includes(p.category)));
+});
+test('new Baiyun-based product retains structured editing and its own URL',async()=>{
+ const {call,env}=await setup();const slug='new-rail';assert.equal((await call('create',{slug,title:'New Rail',baseSlug:'baiyun'})).status,201);
+ const item=await (await call('product?slug='+slug)).json();assert(item.product.itinerary);assert.equal((await call('save',{revision:1,product:item.product})).status,200);assert.equal((await call('publish',{slug,revision:2})).status,200);
+ const page=await onCatalogPage({env,params:{slug},request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'+slug+'/'),next:async()=>new Response('missing',{status:404})});assert.equal(page.status,200);assert((await page.text()).includes('New Rail'));
+});
+
+test('delete removes only unpublished or withdrawn custom records and rejects stale requests',async()=>{
+ const {call,env}=await setup();const slug='delete-test';
+ assert.equal((await call('delete',{slug:'baiyun',revision:0})).status,400);
+ assert.equal((await call('delete',{slug:'homepage',revision:0})).status,400);
+ assert.equal((await call('create',{slug,title:'Delete test',baseSlug:'classic-china'})).status,201);
+ const item=await (await call('product?slug='+slug)).json();assert.equal(item.canDelete,true);
+ assert.equal((await call('delete',{slug,revision:0})).status,409);
+ assert.equal((await call('publish',{slug,revision:1})).status,200);
+ assert.equal((await call('delete',{slug,revision:2})).status,409);
+ assert.equal((await call('unpublish',{slug,revision:2})).status,200);
+ assert.equal((await call('delete',{slug,revision:2})).status,409);
+ env.TEAM_PUBLISH='0';assert.equal((await call('delete',{slug,revision:3})).status,403);env.TEAM_PUBLISH='1';
+ assert.equal((await call('delete',{slug,revision:3}, {anonymous:true})).status,401);
+ assert.equal((await call('delete',{slug,revision:3}, {origin:'https://evil.test'})).status,403);
+ assert.equal((await call('delete',{slug,revision:3})).status,200);
+ assert.equal((await call('product?slug='+slug)).status,404);
+ const list=await (await call('products')).json();assert(!list.products.some(p=>p.slug===slug));
+ assert.equal((await call('create',{slug:'draft-delete',title:'Draft',baseSlug:'baiyun'})).status,201);
+ assert.equal((await call('delete',{slug:'draft-delete',revision:1})).status,200);
+});
+
+test('publication placement moves cards between real sections without changing detail URLs',async()=>{
+ const {call,env}=await setup(),slug='choose-location';
+ await call('create',{slug,title:'Placement <safe>',baseSlug:'classic-china'});
+ let item=await (await call('product?slug='+slug)).json();
+ assert.equal(item.product.placement,'itineraries');assert.equal(item.placements.length,4);
+ const source=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ const collection=async()=>await (await catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'),next:async()=>new Response(source)})).text();
+ for(const location of ['destinations','itineraries','experiences','more']){
+  item.product.placement=location;
+  const before=await collection();
+  const saved=await (await call('save',{product:item.product,revision:item.revision})).json();
+  assert.equal(await collection(),before,'saving a draft must not move the live card');
+  const published=await (await call('publish',{slug,revision:saved.revision})).json();item.revision=published.revision;
+  const html=await collection(),path='/journeys/'+slug+'/';
+  if(location==='more')assert(html.slice(html.indexOf('More journeys to discover.')).includes(path));
+  else{const start=html.indexOf('id="'+location+'"'),end=html.indexOf('</section>',start);assert(html.slice(start,end).includes(path));assert(!html.slice(end).includes(path));}
+  assert(html.includes('Placement &lt;safe&gt;'));assert.equal((await (await call('product?slug='+slug)).json()).url,path);
+ }
+ item.product.placement='collection';assert.equal((await call('save',{product:item.product,revision:item.revision})).status,400);
+ item.product.placement='destinations';const saved=await (await call('save',{product:item.product,revision:item.revision})).json();await call('publish',{slug,revision:saved.revision});item=await (await call('product?slug='+slug)).json();await call('unpublish',{slug,revision:item.revision});assert(!(await collection()).includes('/journeys/'+slug+'/'));
+});
+
+test('existing placements stay unchanged and rail products can choose the main collection',async()=>{
+ const {call,env}=await setup();
+ const existing=await (await call('product?slug=classic-china')).json();assert.equal(existing.product.placement,'original');
+ const source=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ existing.product.placement='destinations';let saved=await (await call('save',{product:existing.product,revision:existing.revision})).json();await call('publish',{slug:'classic-china',revision:saved.revision});
+ const html=await (await catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'),next:async()=>new Response(source)})).text();
+ const start=html.indexOf('id="destinations"'),end=html.indexOf('</section>',start);assert(html.slice(start,end).includes('/journeys/classic-china/'));assert(!html.slice(end).includes('/journeys/classic-china/'));
+ await call('create',{slug:'rail-location',title:'Rail placement',baseSlug:'baiyun'});const rail=await (await call('product?slug=rail-location')).json();assert.equal(rail.product.placement,'collection');assert.deepEqual(rail.placements.map(x=>x.value),['collection','more']);saved=await (await call('save',{product:rail.product,revision:rail.revision})).json();await call('publish',{slug:rail.product.slug,revision:saved.revision});
+ const railHtml=await (await catalogCollection({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/'),next:async()=>new Response(readFileSync(new URL('../public/silk-road-luxury-trains/index.html',import.meta.url),'utf8'))})).text();const a=railHtml.indexOf('id="train-collection"'),b=railHtml.indexOf('</section>',a);assert(railHtml.slice(a,b).includes('/silk-road-luxury-trains/rail-location/'));assert(!railHtml.includes('More journeys to discover.'));
+});
+
+test('authenticated collection preview shows saved placement without publishing or leaking other drafts',async()=>{
+ const {call,env,token,sql}=await setup();
+ await call('create',{slug:'preview-location',title:'Saved preview only',baseSlug:'classic-china'});
+ await call('create',{slug:'private-other',title:'Other private draft',baseSlug:'classic-china'});
+ let item=await (await call('product?slug=preview-location')).json();item.product.placement='destinations';
+ const saved=await (await call('save',{product:item.product,revision:item.revision})).json();
+ item=await (await call('product?slug=preview-location')).json();assert.equal(item.collectionPreviewUrl,'/private-china-tours/?team-preview=preview-location#destinations');
+ const source=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ const render=(query='',authorized=true)=>catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'+query,{headers:authorized?{Cookie:'__Host-sukha-team='+token}:{}}),next:async()=>new Response(source)});
+ const before=sql.prepare('SELECT * FROM product_content').all();
+ assert.equal((await render('?team-preview=preview-location',false)).status,401);
+ const preview=await render('?team-preview=preview-location');assert.equal(preview.headers.get('X-Robots-Tag'),'noindex, nofollow');assert.match(preview.headers.get('Cache-Control'),/private, no-store/);
+ const html=await preview.text(),start=html.indexOf('id="destinations"'),end=html.indexOf('</section>',start);
+ assert(html.includes('草稿位置预览'));assert(html.slice(start,end).includes('Saved preview only'));assert(html.includes('/api/team/preview?slug=preview-location'));assert(!html.includes('Other private draft'));assert(!(await (await render()).text()).includes('Saved preview only'));assert.deepEqual(sql.prepare('SELECT * FROM product_content').all(),before);
+ await call('unpublish',{slug:'preview-location',revision:saved.revision});assert((await (await render('?team-preview=preview-location')).text()).includes('Saved preview only'));
+ assert.equal((await render('?team-preview=missing')).status,404);
+});
+
+test('withdrawn built-in Baiyun can preview its original collection position',async()=>{
+ const {call,env,token}=await setup();let item=await (await call('product?slug=baiyun')).json();item.product.title='Hidden train draft';let saved=await (await call('save',{product:item.product,revision:0})).json();await call('unpublish',{slug:'baiyun',revision:saved.revision});
+ const result=await trainCollectionRequest({env,request:new Request('https://sukhatrip.com/silk-road-luxury-trains/?team-preview=baiyun',{headers:{Cookie:'__Host-sukha-team='+token}}),next:async()=>new Response(readFileSync(new URL('../public/silk-road-luxury-trains/index.html',import.meta.url),'utf8'))});assert((await result.text()).includes('Hidden train draft'));assert.equal(result.headers.get('X-Robots-Tag'),'noindex, nofollow');
+});
+
+test('all destination pages are editable and isolated from train products and public drafts',async()=>{
+ const {call,env}=await setup(),list=await (await call('products')).json();
+ const slugs=readdirSync(new URL('../public/destinations/',import.meta.url),{withFileTypes:true}).filter(d=>d.isDirectory()).map(d=>d.name);
+ const destinations=list.products.filter(p=>p.category==='destinations');assert.equal(destinations.length,11);
+ assert.deepEqual(destinations.map(p=>p.slug).sort(),slugs.map(s=>'destination-'+s).sort());
+ assert(destinations.every(p=>p.localName));assert.equal(list.templates.filter(p=>p.category==='destinations').length,destinations.length);
+ assert(list.products.some(p=>p.slug==='chengdu'&&p.category==='silk-road-luxury-trains'));
+ for(const slug of slugs){
+  const id='destination-'+slug,item=await (await call('product?slug='+id)).json();
+  assert.equal(item.url,'/destinations/'+slug+'/');assert.equal(item.product.placement,undefined);assert.equal(item.placements.length,0);
+  assert.equal(item.canDelete,false);assert.equal(item.canUnpublish,true);assert(item.collectionPreviewUrl.endsWith('#'+slug));
+  const page=(method='GET',tail='/')=>destinationRequest({env,params:{slug},request:new Request('https://sukhatrip.com/destinations/'+slug+tail,{method}),next:async()=>new Response('original '+slug)});
+  item.product.title='Edited '+slug;
+  assert.equal((await call('save',{product:item.product,revision:0})).status,200);
+  assert.equal(await (await page()).text(),'original '+slug);
+  const preview=await call('preview?slug='+id);assert.equal(preview.headers.get('X-Robots-Tag'),'noindex');assert((await preview.text()).includes('Edited '+slug));
+  assert.equal((await call('publish',{slug:id,revision:1})).status,200);
+  const live=await page(),html=await live.text();assert.equal(live.status,200);assert(html.includes('Edited '+slug));assert(!html.includes('{{CMS_'));
+  assert(html.includes('https://sukhatrip.com/destinations/'+slug+'/'));assert(!html.includes('/destinations/destination-'));
+  assert.equal((await page('HEAD')).body,null);assert.equal((await page('GET','')).status,301);
+  assert.equal((await call('unpublish',{slug:id,revision:2})).status,200);assert.equal((await page()).status,404);
+  assert.equal((await call('publish',{slug:id,revision:3})).status,200);assert.equal((await page()).status,200);
+ }
+ assert.equal((await call('create',{slug:'copy-destination',title:'Copy',baseSlug:'destination-tibet'})).status,201);
+ const train=await (await call('product?slug=chengdu')).json();assert.equal(train.revision,0);assert.equal(train.product.title,catalog.chengdu.product.title);
+});
+
+test('destination collection preview, published cards and sitemap follow destination publication',async()=>{
+ const {call,env,token}=await setup(),slug='destination-tibet',original=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ const item=await (await call('product?slug='+slug)).json();item.product.title='Tibet updated';item.product.values[catalog[slug].fields.find(f=>f.type==='image').key]='/assets/home-v1/yunnan.webp';
+ await call('save',{product:item.product,revision:0});
+ const collection=(preview=false,authorized=true)=>catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'+(preview?'?team-preview='+slug:''),{headers:authorized?{Cookie:'__Host-sukha-team='+token}:{}}),next:async()=>new Response(original)});
+ assert(!(await (await collection()).text()).includes('Tibet updated'));
+ assert.equal((await collection(true,false)).status,401);
+ const preview=await collection(true);assert.equal(preview.headers.get('X-Robots-Tag'),'noindex, nofollow');assert((await preview.text()).includes('Tibet updated'));
+ await call('publish',{slug,revision:1});const live=await (await collection()).text();assert(live.includes('Tibet updated'));assert(live.includes('/destinations/inner-mongolia/'));
+ const sitemap=()=>sitemapRequest({env,request:new Request('https://sukhatrip.com/sitemap.xml'),next:async()=>new Response('<urlset><url><loc>https://sukhatrip.com/destinations/tibet/</loc></url></urlset>')});
+ assert((await (await sitemap()).text()).includes('/destinations/tibet/'));await call('unpublish',{slug,revision:2});
+ assert(!(await (await collection()).text()).includes('href="/destinations/tibet/"'));assert(!(await (await sitemap()).text()).includes('/destinations/tibet/'));
+ await call('publish',{slug,revision:3});assert((await (await collection()).text()).includes('Tibet updated'));
+});
+
+test('destination films use the existing play button and reject unsafe links and quote days',()=>{
+ const entry=catalog['destination-tibet'],p=structuredClone(entry.product),field=type=>entry.fields.find(f=>f.type===type);
+ p.videoUrl='https://ik.imagekit.io/negxem1l9/new.mp4';p.values[field('days').key]='9';validateCatalogProduct(p);
+ const html=renderCatalogProduct(p,'https://sukhatrip.com');assert(html.includes('data-film-src="'+p.videoUrl+'"'));assert(html.includes('data-quote-days="9"'));assert(!html.includes('<video'));
+ p.values[field('url').key]='javascript:alert(1)';assert.throws(()=>validateCatalogProduct(p),/HTTPS/);
+ p.values[field('url').key]='https://example.test/film';p.values[field('days').key]='0';assert.throws(()=>validateCatalogProduct(p),/天数/);
+ const routes=JSON.parse(readFileSync(new URL('../pages-dist/_routes.json',import.meta.url),'utf8'));assert(routes.include.includes('/destinations/*'));
+});
+
+test('all six experience pages publish at their original URLs and update themed cards',async()=>{
+ const {call,env,token}=await setup(),list=await (await call('products')).json();
+ const categories=['signature-experiences','experiences','wildlife'],pages=list.products.filter(p=>categories.includes(p.category));assert.equal(pages.length,6);
+ assert.equal(list.templates.filter(p=>categories.includes(p.category)).length,pages.length);
+ const original=readFileSync(new URL('../public/private-china-tours/index.html',import.meta.url),'utf8');
+ for(const category of categories){
+  const {onRequest}=await import('../functions/'+category+'/[slug].js');
+  for(const p of pages.filter(p=>p.category===category)){
+   const item=await (await call('product?slug='+p.slug)).json(),slug=item.url.split('/')[2];assert(item.collectionPreviewUrl.endsWith('#experiences'));
+   item.product.title='Updated '+slug;await call('save',{product:item.product,revision:0});
+   const page=()=>onRequest({env,params:{slug},request:new Request('https://sukhatrip.com'+item.url),next:async()=>new Response('original')});
+   assert.equal(await (await page()).text(),'original');
+   const collection=preview=>catalogCollection({env,request:new Request('https://sukhatrip.com/private-china-tours/'+(preview?'?team-preview='+p.slug:''),{headers:{Cookie:'__Host-sukha-team='+token}}),next:async()=>new Response(original)});
+   assert((await (await collection(true)).text()).includes('Updated '+slug));assert(!(await (await collection(false)).text()).includes('Updated '+slug));
+   await call('publish',{slug:p.slug,revision:1});assert((await (await page()).text()).includes('Updated '+slug));assert((await (await collection(false)).text()).includes('Updated '+slug));
+   await call('unpublish',{slug:p.slug,revision:2});assert.equal((await page()).status,404);assert(!(await (await collection(false)).text()).includes('href="'+item.url+'"'));
+   assert.equal((await call('create',{slug:'copy-'+slug,title:'Copy',baseSlug:p.slug})).status,201);
+  }
+ }
+});

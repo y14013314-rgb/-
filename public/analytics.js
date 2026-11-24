@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const id='G-VTMK0R2B1W',key='sukha-analytics-consent-v1';
- if(!['sukhatrip.com','www.sukhatrip.com'].includes(location.hostname)||/^\/(team|api|admin|quote)(\/|$)/.test(location.pathname)||new URLSearchParams(location.search).has('team-preview'))return;
+ if(!['sukhatrip.com','www.sukhatrip.com'].includes(location.hostname)||/^\/(team|api|admin|quote)(\/|$)/.test(location.pathname)||['team-preview','layout-preview'].some(key=>new URLSearchParams(location.search).has(key)))return;
  let allowed=false,started=false,pageSent=false;const seen=new Set();
  const read=(storage,k)=>{try{return JSON.parse(globalThis[storage].getItem(k));}catch{return null;}};
  const write=(storage,k,v)=>{try{globalThis[storage].setItem(k,JSON.stringify(v));}catch{}};

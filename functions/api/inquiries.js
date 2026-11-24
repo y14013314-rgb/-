@@ -1,4 +1,4 @@
-import {notify} from '../../lib/content/inquiry-notifications.mjs';
+import {notify,inquiryRecipient} from '../../lib/content/inquiry-notifications.mjs';
 const respond = (body, status = 200) => Response.json(body, {
   status,
   headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
@@ -41,9 +41,12 @@ export async function onRequest({ request, env }) {
 
   const reference = 'INQ-' + requestId.toUpperCase();
   const notificationId = 'pages-' + reference;
+  const recipient=inquiryRecipient(env,url.hostname);
   const type=body.type===undefined?'rail':body.type;
   if(!['private','rail','cruise'].includes(type))return respond({error:'Invalid journey type.'},400);
-  const payload = JSON.stringify({ type, summary, consent: true });
+  const source=body.source;
+  if(source!==undefined&&(!source||typeof source.page!=='string'||source.page.length>200||!/^\/(?:private-china-tours\/(?:destinations|travel-styles|signature-journeys)(?:\/[a-z0-9-]+)?|journeys\/[a-z0-9-]+)\/$/.test(source.page)||typeof source.product!=='string'||!/^[a-z0-9-]{0,80}$/.test(source.product)))return respond({error:'Invalid inquiry source.'},400);
+  const payload = JSON.stringify({ type, summary, consent: true,...(source?{source:{page:source.page,product:source.product}}:{}) });
   const time = Date.now();
   const db = env.DB;
   const lookup = db.prepare('SELECT name,email,payload FROM inquiries WHERE id=?').bind(reference);
@@ -65,15 +68,15 @@ export async function onRequest({ request, env }) {
         VALUES (?,?,?,?,'new',?,?) ON CONFLICT(id) DO NOTHING`).bind(reference, name, email, payload, time, time),
       db.prepare(`INSERT INTO notifications (id,inquiry_id,recipient,status,created_at)
         SELECT ?,id,?,'pending',? FROM inquiries WHERE id=? AND name=? AND email=? AND payload=?
-        ON CONFLICT(id) DO NOTHING`).bind(notificationId, env.INQUIRY_EMAIL || '', time, reference, name, email, payload),
+        ON CONFLICT(id) DO NOTHING`).bind(notificationId, recipient, time, reference, name, email, payload),
     ]);
     const stored = await lookup.first();
     if (stored.name !== name || stored.email !== email || stored.payload !== payload) {
       return respond({ error: 'This request ID belongs to different inquiry details.' }, 409);
     }
-    if (env.INQUIRY_EMAIL) {
+    if (recipient) {
       await db.prepare("UPDATE notifications SET recipient=? WHERE id=? AND recipient='' AND status='pending'")
-        .bind(env.INQUIRY_EMAIL, notificationId).run();
+        .bind(recipient, notificationId).run();
     }
     const notification = await db.prepare('SELECT id,recipient,status FROM notifications WHERE id=?')
       .bind(notificationId).first();

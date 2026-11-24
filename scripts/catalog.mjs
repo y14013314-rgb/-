@@ -1,12 +1,20 @@
 import {readFileSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
+import {initialLayout,signatures} from '../lib/content/private-seed.mjs';
+import {signatureSource} from '../lib/content/private-shell.mjs';
 const decode=s=>s.replace(/&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-f]+);/gi,e=>{const map={'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'",'&nbsp;':' '};if(map[e])return map[e];const n=e.startsWith('&#x')?parseInt(e.slice(3),16):parseInt(e.slice(2),10);return Number.isFinite(n)?String.fromCodePoint(n):e;});
 export function buildCatalog(root){
  const result={},pageCategories=['destinations','signature-experiences','experiences','wildlife'];
- for(const category of ['silk-road-luxury-trains','yangtze-river-cruises','journeys','home',...pageCategories])for(const slug of category==='home'?['homepage']:readdirSync(join(root,'public',category))){
+ const layout=initialLayout(),signaturePages=Object.fromEntries(signatures.map(row=>[row[0],signatureSource(row,layout)]));
+ for(const category of ['silk-road-luxury-trains','yangtze-river-cruises','journeys','home',...pageCategories])for(const slug of category==='home'?['homepage']:[...readdirSync(join(root,'public',category)),...(category==='journeys'?Object.keys(signaturePages):[])]){
   if(slug==='index.html'||slug==='baiyun'||(!['home','journeys',...pageCategories].includes(category)&&!['chengdu','jinxiu-tianfu','jinxiu-dongfang','gold-cruises','yangtze-miracle','century-legend','yangzi-explorer'].includes(slug)))continue;
-  const source=readFileSync(category==='home'?join(root,'public/index.html'):join(root,'public',category,slug,'index.html'),'utf8'),fields=[],values={};
-  const field=(value,label,type='text')=>{const key='field'+fields.length;fields.push({key,label,type});values[key]=decode(value);return '{{CMS_'+key+'}}';};
+  const source=(category==='journeys'&&signaturePages[slug])||readFileSync(category==='home'?join(root,'public/index.html'):join(root,'public',category,slug,'index.html'),'utf8'),fields=[],values={};
+  const signature=category==='journeys'&&Object.hasOwn(signaturePages,slug);
+  const field=(value,label,type='text')=>{
+   const index=fields.length;
+   const key='field'+(signature&&index>=9?index+2:index);
+   fields.push({key,label,type});values[key]=decode(value);return '{{CMS_'+key+'}}';
+  };
   const title=decode(source.match(/<title>(.*?)<\/title>/s)[1].replace(/\s*\|.*$/,''));
   let template=source.replace(/(<main\b[^>]*>)([\s\S]*?)(<\/main>)/,(all,open,body,close)=>{
    let section='页面内容';
@@ -31,6 +39,13 @@ export function buildCatalog(root){
   const id=pageCategories.includes(category)?(category==='destinations'?'destination':category)+'-'+slug:slug;
   const localName=category==='destinations'?{beijing:'北京',shanghai:'上海',xian:'西安',guilin:'桂林',zhangjiajie:'张家界',yunnan:'云南',xinjiang:'新疆',chengdu:'成都',chongqing:'重庆',tibet:'西藏','inner-mongolia':'内蒙古'}[slug]:{'living-china':'生活中国','silk-road':'丝绸之路',xuanzang:'玄奘主题','chengdu-pandas':'成都熊猫','chongqing-night-tour':'重庆城市体验','sanjiangyuan-snow-leopard':'三江源野生动物'}[slug];
   result[id]={path:category==='home'?'/':`/${category}/${slug}/`,label:category==='home'?'首页':title,category,localName,fields,template,product:{slug:id,title,values}};
+  if(category==='journeys'&&Object.hasOwn(signaturePages,slug)){
+   const stops=signatures.find(row=>row[0]===slug)[3].split(' ').map(stop=>layout.destinations.find(place=>place.id===stop));
+   const gallery=stops.filter(place=>place.image).map(place=>({src:place.image,alt:place.title,credit:''}));
+   if(gallery.length<2)for(const place of stops)for(const src of place.extraPhotos||[])gallery.push({src,alt:place.title,credit:''});
+   if(gallery.length<2||gallery.length>10)throw new Error(`Expected 2 to 10 default gallery photos for ${slug}`);
+   Object.assign(result[id].product,{galleryUnified:true,gallery});
+  }
  }
  return result;
 }

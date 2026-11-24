@@ -181,6 +181,7 @@ const routes=[
     ]
   }
 ];
+const cruiseForm=document.getElementById('cruise-inquiry');if(cruiseForm){cruiseForm.voyages=routes;return;}
 const q=id=>document.getElementById(id),date=q('explorer-date'),suite=q('explorer-suite'),extension=q('explorer-extension'),adults=q('explorer-adults'),children=q('explorer-children'),ages=q('explorer-ages'),link=q('explorer-inquire');
 const routeButtons=[...document.querySelectorAll('[data-explorer-route]')].map(button=>({button,label:button.textContent}));
 let selected=routes[0];

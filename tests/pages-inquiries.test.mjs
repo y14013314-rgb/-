@@ -31,6 +31,24 @@ test('save remains unique through mail failure and admin recovery; invalid input
   sql.prepare('INSERT INTO team_members (email,active,updated_at) VALUES (?,?,?)').run('admin@example.test',1,Date.now());env.TEAM_ADMIN_EMAIL='other@example.test';assert.equal((await admin()).status,403);
  }finally{globalThis.fetch=original;}
 });
+test('live inquiry goes only to operations; staging keeps its own recipient',async()=>{
+ const {env,data,sql}=await setup(),original=globalThis.fetch,mail=[];
+ globalThis.fetch=async(url,request)=>{mail.push(JSON.parse(request.body));return new Response('{}');};
+ try{for(const host of ['sukhatrip.com','www.sukhatrip.com','preview.test']){
+  const origin='https://'+host,body={...data,requestId:crypto.randomUUID(),recipient:'ignored@example.test'};
+  const send=()=>onRequest({env,request:new Request(origin+'/api/inquiries',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)})});
+  const before=mail.length;assert.equal((await (await send()).json()).emailSent,true);await send();assert.equal(mail.length,before+1);
+  const expected=host==='preview.test'?env.INQUIRY_EMAIL:'skylinetravel_op@163.com';assert.deepEqual(mail.at(-1).to,[expected]);assert.equal(mail.at(-1).reply_to,data.email);assert(mail.at(-1).text.includes(data.summary));
+  assert.equal(sql.prepare('SELECT recipient FROM notifications WHERE inquiry_id=?').get('INQ-'+body.requestId.toUpperCase()).recipient,expected);
+ }}finally{globalThis.fetch=original;}
+});
+test('private inquiry stores only the source page and product ID and preserves retry identity',async()=>{
+ const {sql,env,data,submit}=await setup();delete env.RESEND_API_KEY;
+ const source={page:'/private-china-tours/destinations/guizhou/',product:'grand-china-discovery'};
+ assert.equal((await submit({...data,source})).status,201);assert.equal((await submit({...data,source})).status,200);
+ assert.deepEqual(JSON.parse(sql.prepare('SELECT payload FROM inquiries').get().payload).source,source);
+ assert.equal((await submit({...data,source:{...source,page:'https://external.test/'}})).status,400);
+});
 test('notification sending lease prevents parallel sends and stale leases can recover',async()=>{
  const {env,data,submit,sql}=await setup(),original=globalThis.fetch;delete env.RESEND_API_KEY;await submit();env.RESEND_API_KEY='test';let release,calls=0;
  globalThis.fetch=async()=>{calls++;await new Promise(r=>release=r);return new Response('{}');};
@@ -39,9 +57,9 @@ test('notification sending lease prevents parallel sends and stale leases can re
  }finally{globalThis.fetch=original;}
 });
 test('home submission locks double clicks, retains UUID across reload, and never reports failed save as success',async()=>{
- const source=readFileSync(new URL('../public/home-v1.js',import.meta.url),'utf8'),code=source.slice(source.indexOf(" let requestId="),source.indexOf(" document.querySelector('#home-copy-request')")),storage=new Map();let calls=0,bodies=[],ok=true;
+ const source=readFileSync(new URL('../public/home-v1.js',import.meta.url),'utf8'),code="const submit=document.querySelector('#home-submit-inquiry'),submitStatus=document.querySelector('#home-submit-status');"+source.slice(source.indexOf(" let requestId="),source.indexOf(" document.querySelector('#home-copy-request')")),storage=new Map();let calls=0,bodies=[],ok=true;
  const run=()=>{const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,{value:'',checked:true,disabled:false,handlers:{},addEventListener(n,f){this.handlers[n]=f;}});return elements.get(id);};get('#home-name').value='Test';get('#home-email').value='test@example.test';get('#home-interest').value='Yangtze River Cruise';
- const context=vm.createContext({document:{querySelector:get},form:{addEventListener(){}},summary:{value:'A river trip'},review:{querySelector:()=>get('review-p')},crypto,TextEncoder,Uint8Array,sessionStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},fetch:async(url,options)=>{calls++;bodies.push(JSON.parse(options.body));return {ok,json:async()=>ok?{saved:true,reference:'INQ-TEST',emailSent:false}:{error:'failed'}};}});vm.runInContext(code,context);return {get,click:()=>get('#home-submit-inquiry').handlers.click()};};
+ const context=vm.createContext({document:{querySelector:get},backup:get('backup'),form:{addEventListener(){}},summary:{value:'A river trip'},review:{querySelector:()=>get('review-p')},crypto,TextEncoder,Uint8Array,sessionStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},fetch:async(url,options)=>{calls++;bodies.push(JSON.parse(options.body));return {ok,json:async()=>ok?{saved:true,reference:'INQ-TEST',emailSent:false}:{error:'failed'}};}});vm.runInContext(code,context);return {get,click:()=>get('#home-submit-inquiry').handlers.click()};};
  let ui=run();await Promise.all([ui.click(),ui.click()]);assert.equal(calls,1);assert.equal(bodies[0].type,'cruise');assert.match(ui.get('#home-submit-status').textContent,/INQ-TEST/);
  ui=run();ok=false;await ui.click();assert.equal(bodies[0].requestId,bodies[1].requestId);assert.match(ui.get('#home-submit-status').textContent,/could not confirm/);assert.equal(ui.get('#home-submit-inquiry').disabled,false);
 });

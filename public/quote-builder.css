@@ -1,1 +1,15 @@
 .quote-dialog{border:0;border-radius:12px;background:#faf8f2;color:#263d37;padding:36px;width:min(720px,92vw);max-height:88dvh;box-sizing:border-box;overflow:auto}.quote-dialog::backdrop{background:#10251ecc}.quote-dialog h2{font-size:32px;margin:10px 0}.quote-close{float:right;background:none;border:0;font-size:32px;cursor:pointer}.quote-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.quote-dialog label{display:block;font-size:14px;margin:12px 0}.quote-dialog input:not([type=checkbox]),.quote-dialog select,.quote-dialog textarea{display:block;box-sizing:border-box;width:100%;padding:12px;margin-top:7px;border:1px solid #bbc6bc;background:white;color:#263d37;font:inherit;border-radius:4px}.quote-dialog fieldset{border:1px solid #bbc6bc;margin:20px 0;padding:12px}.quote-dialog .quote-check{display:inline-flex;align-items:center;gap:7px;margin:8px 14px 8px 0}.quote-actions{display:flex;flex-wrap:wrap;gap:12px}.quote-dialog [hidden]{display:none!important}.quote-dialog button{cursor:pointer}.quote-dialog p{line-height:1.6}@media(max-width:550px){.quote-fields{grid-template-columns:1fr}.quote-dialog{padding:24px}.quote-dialog h2{font-size:27px}.quote-actions>*{width:100%;text-align:center}}
+#home-inquiry-review button.inquiry-confirm:not([hidden]),#quote-review button.inquiry-confirm:not([hidden]){display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:12px 24px;margin:4px 0;background:#204f41;border:2px solid #204f41;border-radius:6px;color:#fff;font:700 16px/1.4 system-ui,sans-serif;cursor:pointer}
+#home-inquiry-review .inquiry-confirm:hover,#quote-review .inquiry-confirm:hover{background:#173a30}
+#home-inquiry-review .inquiry-confirm:focus-visible,#quote-review .inquiry-confirm:focus-visible{outline:3px solid #a56923;outline-offset:3px}
+#home-inquiry-review .inquiry-sent,#quote-review .inquiry-sent{padding:16px 20px;border-left:5px solid #276949;border-radius:4px;background:#e4f3e9;color:#17492f;font:700 clamp(22px,3vw,32px)/1.2 system-ui,sans-serif}
+#home-submit-status,#quote-review [role=status]{overflow-wrap:anywhere}
+.quote-interest-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+.quote-interest-grid .quote-check{display:flex;align-items:center;justify-content:flex-start;min-height:58px;margin:0;padding:12px 14px;border:1px solid #d7d6ca;border-radius:5px;line-height:1.35;text-align:left;cursor:pointer}
+.quote-interest-grid .quote-check input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:#263d37}
+.quote-interest-grid .quote-check:has(:checked){background:#e8eee7;border-color:#345348}
+.quote-dialog form>.quote-check{display:flex;align-items:flex-start;gap:10px;width:100%;box-sizing:border-box;margin:22px 0 0;line-height:1.45}
+.quote-dialog form>.quote-check input{width:18px;height:18px;flex:0 0 18px;margin:2px 0 0;accent-color:#263d37}
+.quote-dialog form>.quote-check span{display:block;min-width:0}
+.quote-dialog #quote-builder>button[type=submit]{display:block;min-height:52px;margin:18px 0 0}
+@media(max-width:550px){.quote-interest-grid{grid-template-columns:1fr}.quote-interest-grid .quote-check{min-height:52px}}

@@ -12,17 +12,20 @@ function setup() {
   return { sqlite, env, call };
 }
 test('single-use OTP, secure session and logout', async () => {
-  const { call } = setup(); const original = globalThis.fetch; let code;
+  const { call, sqlite } = setup(); const original = globalThis.fetch; let code;
   globalThis.fetch = async (_url, init) => { code = JSON.parse(init.body).text.match(/\d{8}/)[0]; return new Response('{}'); };
   try {
     assert.equal((await call('me', null, { method: 'GET' })).status, 401);
-    assert.equal((await call('request-code', { email: 'other@example.test' })).status, 403);
+    const unknown=await call('request-code',{email:'other@example.test'});
+    assert.equal(unknown.status,200);assert.match((await unknown.json()).challenge,/^[a-f0-9-]{36}$/);assert.equal(code,undefined);
     assert.equal((await call('request-code', { email: 'owner@example.test' }, { origin: 'https://evil.test' })).status, 403);
     const sent = await call('request-code', { email: 'owner@example.test' }); const { challenge } = await sent.json();
     assert.equal(sent.status, 200);
     const verified = await call('verify', { challenge, code }); assert.equal(verified.status, 200);
     const cookie = verified.headers.get('Set-Cookie');
     for (const flag of ['HttpOnly','Secure','SameSite=Strict','Path=/']) assert(cookie.includes(flag));
+    assert(cookie.includes('Max-Age=2592000'));
+    assert(sqlite.prepare('SELECT expires_at FROM login_sessions').get().expires_at >= Date.now() + 2591000000);
     assert.equal((await call('verify', { challenge, code })).status, 401);
     assert.equal((await call('me', null, { method: 'GET', cookie })).status, 200);
     await call('logout', {}, { cookie });
@@ -45,7 +48,7 @@ test('email limit and mail failure do not issue a usable code', async () => {
   const { call, sqlite } = setup();const original=globalThis.fetch;
   globalThis.fetch=async()=>new Response('{}',{status:500});
   try {
-    for(let i=0;i<5;i++) assert.equal((await call('request-code',{email:'owner@example.test'})).status,502);
+    for(let i=0;i<5;i++) assert.equal((await call('request-code',{email:'owner@example.test'})).status,200);
     assert.equal((await call('request-code',{email:'owner@example.test'})).status,429);
     assert.equal(sqlite.prepare('SELECT count(*) AS n FROM login_codes').get().n,0);
   } finally { globalThis.fetch=original; }
