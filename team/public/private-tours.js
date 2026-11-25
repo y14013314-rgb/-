@@ -44,11 +44,9 @@
   const tours=Object.values(data.tours).map(item=>[item.id,`${item.group} · ${item.localName?item.localName+' · ':''}${item.title}`]),choices=items.map(item=>[item.id,item.title]);
   const pages=[['@overview','总览页'],...choices,['@new','＋ 新建资料']],page=selected[key]||'@overview';byId('page').replaceChildren(...pages.map(([id,label])=>new Option(label,id)));byId('page').value=page;
   const names={popular:'热门目的地（默认展示前 6 张）',deep:'深度目的地（默认展示前 3 张）',other:'仅在按地区探索展示',themes:'主题卡片（官网展示前 6 张）',series:'系列卡片',tags:'行程筛选标签',info:'封面与介绍',experiences:'代表性体验',tours:'关联行程',create:'新建资料'};
-  names.story='目的地介绍 · Best Time 下方';
   names.copy='总览标题与文案';names.hero='详情首屏与按钮';
   Object.assign(names,{schedule:'路线与每日行程',film:'视频栏目',ending:'页底规划邀请'});
-  const sections=page==='@overview'?(dest?['popular','deep','other']:style?['themes']:['series','tags']):page==='@new'?['create']:dest?['info','experiences','story','tours']:['info','tours'];
-  if(dest&&page==='beijing')sections.splice(sections.indexOf('story'),1);
+  const sections=page==='@overview'?(dest?['popular','deep','other']:style?['themes']:['series','tags']):page==='@new'?['create']:dest?['info','experiences','tours']:['info','tours'];
   if(page==='@overview')sections.push('copy');else if(page!=='@new'&&(dest||style))sections.push('hero');
   if(page==='@overview'||page!=='@new'&&(dest||style)){if(page!=='@overview')sections.push('schedule');sections.push('film','ending');}
   const section=sections.includes(selected.section)?selected.section:sections[0];byId('section').replaceChildren(...sections.map(id=>new Option(names[id],id)));byId('section').value=section;
@@ -100,11 +98,6 @@
   if(item&&section==='experiences'){
    edit.append(node('p',`Top Experiences · 当前 ${item.experiences.length} 张。不限制为三张；全部删除后，官网将隐藏此板块。`),button('＋ 添加体验卡',()=>{item.experiences.push({title:'',image:''});redraw();panel.querySelector('[data-experience]:last-child input')?.focus();}));
    item.experiences.forEach((exp,index,all)=>{const row=node('fieldset');row.dataset.experience='';row.append(node('legend',`体验卡 ${index+1}`));field(row,exp,'title','体验名称');const photo=photoField(row,'体验配图',exp.image,value=>{exp.image=value;});photo.append(button('移除配图',()=>{exp.image='';redraw();}));row.append(button('上移',()=>{[all[index-1],all[index]]=[all[index],all[index-1]];redraw();},!index),button('下移',()=>{[all[index+1],all[index]]=[all[index],all[index+1]];redraw();},index===all.length-1),button('删除此体验卡',()=>{all.splice(index,1);redraw();}));edit.append(row);});
-  }
-  if(item&&section==='story'){
-   edit.append(node('p','仅修改当前目的地。小标题、标题、正文和标签都可编辑；全部留空则隐藏整段。'));
-   const story=item.story??={eyebrow:'',title:'',body:'',tag1:'',tag2:''};
-   for(const [key,label] of Object.entries({eyebrow:'小标题',title:'主标题',body:'正文',tag1:'标签 1',tag2:'标签 2'}))field(edit,story,key,label,key==='body');
   }
   if(item&&section==='tours'){
    edit.append(node('p','可以添加各类已上架产品。同一卡片可以推荐到多个页面；从本板块移出，不会下架产品。'));

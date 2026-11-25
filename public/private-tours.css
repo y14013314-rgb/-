@@ -46,9 +46,7 @@ h2+.pt-slider>.pt-controls{position:absolute;bottom:100%;right:0}
 .pt-banner:has(.tour-photos) .product-film-play{position:absolute;top:12px;bottom:auto;color:white;background:#20352de8;border-radius:8px;padding:8px 14px;max-width:90%}
 .pt-banner .tour-photos figcaption{right:auto;left:0}
 main:not(.pt)>.pt-back{padding-inline:4.5%}
-.pt-intro-story,.pt-story{display:grid;grid-template-columns:1fr 1.6fr;gap:5%;align-items:baseline;overflow-wrap:anywhere}
-.pt-story p{margin:0;white-space:pre-line}.pt-story-tags{display:flex;flex-wrap:wrap;gap:8px}.pt-story-tags span{border:1px solid #ccd1c8;padding:5px 10px;border-radius:20px}
-.pt-story p{max-width:68ch}
+.pt-intro-story{display:grid;grid-template-columns:1fr 1.6fr;gap:5%;align-items:baseline;overflow-wrap:anywhere}
 @media(min-width:1400px){
  body:has(main .pt-index,main .pt-banner)>header{height:80px}
  body:has(main .pt-index,main .pt-banner)>header+.site-search{position:absolute;z-index:6;top:14px;left:19%;width:min(26%,430px);margin:0}
@@ -56,7 +54,7 @@ main:not(.pt)>.pt-back{padding-inline:4.5%}
 @media(max-width:700px){
  .pt-track{grid-auto-columns:87%}
  .pt-track .pt-card a{min-height:clamp(245px,72vw,360px)}
- .pt-intro-story,.pt-story{display:block}
+ .pt-intro-story{display:block}
  .pt-caption{width:100%;padding-bottom:70px}
  .pt-banner .product-film-play{bottom:1.5rem}
  .pt-controls button{height:38px;width:38px}
